@@ -168,3 +168,10 @@ fn man_page_generates() {
     assert!(out.contains(".SH NAME"));
     assert!(out.contains("cull"));
 }
+
+#[test]
+fn decodes_windows_1251_file_via_meta_charset() {
+    let (out, _, code) = cull(&["p.msg", "-t", "tests/fixtures/cp1251.html"], None);
+    assert_eq!(code, 0);
+    assert_eq!(out.trim(), "привет мир");
+}

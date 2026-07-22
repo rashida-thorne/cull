@@ -1,3 +1,4 @@
+mod decode;
 mod extract;
 mod markdown;
 mod table;
@@ -114,14 +115,17 @@ fn main() -> ExitCode {
 fn read_input(input: &Option<String>) -> Result<String, String> {
     match input.as_deref() {
         None | Some("-") => {
-            let mut buf = String::new();
+            let mut buf = Vec::new();
             std::io::stdin()
-                .read_to_string(&mut buf)
+                .read_to_end(&mut buf)
                 .map_err(|e| format!("reading stdin: {e}"))?;
-            Ok(buf)
+            Ok(decode::decode_html(&buf, None))
         }
         Some(path) if path.starts_with("http://") || path.starts_with("https://") => fetch(path),
-        Some(path) => std::fs::read_to_string(path).map_err(|e| format!("{path}: {e}")),
+        Some(path) => {
+            let buf = std::fs::read(path).map_err(|e| format!("{path}: {e}"))?;
+            Ok(decode::decode_html(&buf, None))
+        }
     }
 }
 
@@ -130,9 +134,16 @@ fn fetch(url: &str) -> Result<String, String> {
         .header("User-Agent", concat!("cull/", env!("CARGO_PKG_VERSION")))
         .call()
         .map_err(|e| format!("fetching {url}: {e}"))?;
-    resp.body_mut()
-        .read_to_string()
-        .map_err(|e| format!("reading {url}: {e}"))
+    let header_charset = resp
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .and_then(decode::charset_from_content_type);
+    let bytes = resp
+        .body_mut()
+        .read_to_vec()
+        .map_err(|e| format!("reading {url}: {e}"))?;
+    Ok(decode::decode_html(&bytes, header_charset.as_deref()))
 }
 
 fn run(args: &Args) -> Result<bool, String> {

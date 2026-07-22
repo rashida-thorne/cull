@@ -30,6 +30,9 @@ actually needs to go:
   lists, code blocks, tables. Ideal for feeding web content to an LLM.
 - **URLs as input** — `cull h1 -t https://example.com` fetches for you, and
   relative links resolve against the page URL automatically.
+- **Any encoding** — non-UTF-8 pages (Shift_JIS, KOI8-R, windows-1251, …)
+  decode correctly: BOM, `Content-Type` header, and `<meta charset>` are all
+  honored, browser-style.
 
 ## Install
 
@@ -169,6 +172,7 @@ diffing) in the **[cookbook](docs/COOKBOOK.md)**.
 | HTML → Markdown | — | — | ✓ |
 | fetch URLs directly | — | — | ✓ |
 | resolve relative URLs | — | ✓ (`-b`) | ✓ (auto for URLs) |
+| non-UTF-8 pages (Shift_JIS, KOI8-R, …) | ✓ | mojibake | ✓ (BOM + header + `<meta>` sniff) |
 | maintained | unmaintained | stale | ✓ |
 
 ### Performance
