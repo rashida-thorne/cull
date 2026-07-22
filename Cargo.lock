@@ -186,6 +186,7 @@ dependencies = [
  "clap",
  "clap_complete",
  "ego-tree",
+ "libc",
  "scraper",
  "serde_json",
  "ureq",

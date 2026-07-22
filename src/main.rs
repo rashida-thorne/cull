@@ -72,6 +72,11 @@ struct Args {
 }
 
 fn main() -> ExitCode {
+    // Die silently on SIGPIPE (e.g. `cull ... | head`), like grep and cat.
+    #[cfg(unix)]
+    unsafe {
+        libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+    }
     let args = Args::parse();
     if let Some(shell) = args.completions {
         let mut cmd = <Args as clap::CommandFactory>::command();
