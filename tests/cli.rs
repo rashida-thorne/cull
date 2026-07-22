@@ -109,7 +109,7 @@ fn table_json_rows() {
 #[test]
 fn markdown_mode() {
     let (out, _, _) = cull(&["--md", &fixture("blog.html")], None);
-    assert!(out.contains("## Hello, world"));
+    assert!(out.contains("## [Hello, world](/posts/hello)"));
     assert!(out.contains("| Item | Price |"));
     assert!(out.contains("*Exciting*"));
 }

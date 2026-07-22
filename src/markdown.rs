@@ -67,7 +67,7 @@ impl<'a> Renderer<'a> {
                 self.block_start();
                 self.out.push_str(&"#".repeat(level));
                 self.out.push(' ');
-                self.out.push_str(&inline_text(el));
+                self.walk_children(*el);
                 self.block_end();
             }
             "p" => {
@@ -368,6 +368,12 @@ mod tests {
     fn skips_script_and_style() {
         let m = md("<p>keep</p><script>var x;</script><style>p{}</style>");
         assert_eq!(m, "keep");
+    }
+
+    #[test]
+    fn heading_keeps_link() {
+        let m = md(r#"<h2><a href="/p/1">Hello</a></h2>"#);
+        assert_eq!(m, "## [Hello](https://ex.com/p/1)");
     }
 
     #[test]
