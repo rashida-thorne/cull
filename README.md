@@ -208,6 +208,10 @@ cargo build --release   # needs stable Rust
 cargo test
 ```
 
+Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). `cull` should
+never panic on any input; `scripts/fuzz-smoke.py` throws ~1,000 randomized
+documents, templates, and selectors at it to keep that promise.
+
 ## License
 
 MIT
