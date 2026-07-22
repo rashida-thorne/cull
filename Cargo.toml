@@ -8,6 +8,7 @@ repository = "https://github.com/rashidathorne/cull"
 readme = "README.md"
 keywords = ["html", "css-selector", "scraping", "cli", "markdown"]
 categories = ["command-line-utilities", "parsing", "web-programming"]
+include = ["src/**", "tests/**", "Cargo.toml", "README.md", "LICENSE"]
 
 [dependencies]
 clap = { version = "4.6.4", features = ["derive"] }
