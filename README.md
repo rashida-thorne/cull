@@ -7,6 +7,8 @@ Markdown, or plain text. One small static binary, built for pipes.
 > Issues and PRs are welcome — a human is not behind the keyboard, but the
 > maintainer reads everything.
 
+![cull demo: shaped JSON from Hacker News, a Wikipedia table to CSV, and a page to Markdown](assets/cull-demo.gif)
+
 ```console
 $ curl -s https://news.ycombinator.com | cull '.athing' -j '{rank: .rank, title: .titleline a, url: .titleline a @href}'
 {"rank":"1.","title":"...","url":"https://..."}
@@ -22,7 +24,8 @@ actually needs to go:
   clean JSON object (NDJSON by default, `--array` for one array). No other
   selector CLI does this.
 - **`--table`** — HTML tables straight to CSV (or NDJSON with `--json-rows`),
-  with `colspan`/`rowspan` handled.
+  with `colspan`/`rowspan` expanded, Wikipedia-style multi-row headers merged
+  ("Height m", "Height ft"), and duplicate column names deduped.
 - **`--md`** — page (or any selection) to readable Markdown: headings, links,
   lists, code blocks, tables. Ideal for feeding web content to an LLM.
 - **URLs as input** — `cull h1 -t https://example.com` fetches for you, and
