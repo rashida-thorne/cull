@@ -155,6 +155,9 @@ cull main --md https://docs.rs/scraper | llm "what does ElementRef do?"
 cull '.headline a' -a href https://example-news.site | sort -u
 ```
 
+More live-verified recipes (HN, lobste.rs, Wikipedia, LLM pipelines, cron
+diffing) in the **[cookbook](docs/COOKBOOK.md)**.
+
 ## vs. pup / htmlq
 
 | | pup | htmlq | **cull** |
