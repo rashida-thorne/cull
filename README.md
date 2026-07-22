@@ -10,9 +10,9 @@ Markdown, or plain text. One small static binary, built for pipes.
 ![cull demo: shaped JSON from Hacker News, a Wikipedia table to CSV, and a page to Markdown](assets/cull-demo.gif)
 
 ```console
-$ curl -s https://news.ycombinator.com | cull '.athing' -j '{rank: .rank, title: .titleline a, url: .titleline a @href}'
-{"rank":"1.","title":"...","url":"https://..."}
-{"rank":"2.","title":"...","url":"https://..."}
+$ curl -s https://news.ycombinator.com | cull '.athing' -j '{rank: .rank | num, title: .titleline a, url: .titleline a @href}'
+{"rank":1,"title":"...","url":"https://..."}
+{"rank":2,"title":"...","url":"https://..."}
 ...
 ```
 
@@ -42,6 +42,7 @@ Prebuilt binaries for Linux/macOS/Windows are on the
 
 Shell completions: `cull --completions bash|zsh|fish|elvish|powershell`
 (e.g. `cull --completions zsh > ~/.zfunc/_cull`).
+Man page: `cull --man > cull.1` (or `cull --man | man -l -` to read it now).
 
 ## Usage
 
@@ -67,19 +68,21 @@ cull [SELECTOR] [INPUT] [flags]
 The `-j` template is evaluated once per matched element:
 
 ```
-{key: selector, url: selector @attr, list: [selector], nested: {…}}
+{key: selector, url: selector @attr, n: selector | num, list: [selector], nested: {…}}
 ```
 
 - `selector` — any CSS selector, evaluated *within* the match; first hit wins.
 - `@field` — `@text` (default), `@html`, `@innerhtml`, or any attribute
   (`@href`, `@src`, `@data-id`, …).
+- `| num` — pull the first number out of the value as a real JSON number:
+  `"1,234 points"` → `1234`, `"$3.50"` → `3.5`, no digits → `null`.
 - `[selector]` — collect **all** matches into an array.
 - `.` — the matched element itself (e.g. `. @data-id`).
-- Quote selectors containing `, } ] @`: `"a.x, a.y"`.
+- Quote selectors containing `, } ] @ |`: `"a.x, a.y"`.
 
 ```console
-$ cull '.post' -j '{title: h2, url: a @href, tags: [.tag], id: . @data-id}' blog.html
-{"title":"Hello, world","url":"/posts/hello","tags":["rust","intro"],"id":"1"}
+$ cull '.post' -j '{title: h2, url: a @href, score: .pts | num, tags: [.tag]}' blog.html
+{"title":"Hello, world","url":"/posts/hello","score":128,"tags":["rust","intro"]}
 ```
 
 Missing single values become `null`; missing lists become `[]` — rows stay

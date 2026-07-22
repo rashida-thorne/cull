@@ -3,17 +3,19 @@
 //! Template grammar (whitespace-insensitive):
 //!   template := object | array | expr
 //!   object   := '{' key ':' template (',' key ':' template)* [','] '}'
-//!   array    := '[' template ']'          -- collects *all* matches
-//!   expr     := selector [ '@' field ]    -- first match only
+//!   array    := '[' template ']'                     -- collects *all* matches
+//!   expr     := selector [ '@' field ] [ '|' filter ] -- first match only
 //!   key      := bareword | "quoted"
 //!   field    := text | html | an attribute name (e.g. href)
+//!   filter   := num    -- pull the first number out of the value ("1,234
+//!                         points" → 1234, "$3.50" → 3.5); null if none
 //!
 //! A selector is any CSS selector; quote it ("a.x, a.y") if it contains
-//! `,`, `}`, `]`, or `@`. The selector `.` (or an empty one) means the
+//! `,`, `}`, `]`, `@`, or `|`. The selector `.` (or an empty one) means the
 //! context element itself.
 //!
 //! Example:
-//!   {title: h2, url: a @href, tags: [.tag], meta: {id: . @data-id}}
+//!   {title: h2, url: a @href, score: .points | num, tags: [.tag]}
 
 use crate::text;
 use scraper::{ElementRef, Selector};
@@ -26,6 +28,7 @@ pub enum Template {
     Expr {
         selector: Option<Selector>,
         field: Field,
+        filter: Option<Filter>,
     },
 }
 
@@ -35,6 +38,12 @@ pub enum Field {
     Html,
     InnerHtml,
     Attr(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Filter {
+    /// Extract the first number in the value ("1,234 points" → 1234).
+    Num,
 }
 
 pub fn parse_template(src: &str) -> Result<Template, String> {
@@ -184,7 +193,7 @@ impl<'a> Parser<'a> {
         } else {
             let mut s = String::new();
             while let Some(c) = self.peek() {
-                if matches!(c, ',' | '}' | ']' | '@') {
+                if matches!(c, ',' | '}' | ']' | '@' | '|') {
                     break;
                 }
                 s.push(c);
@@ -223,6 +232,32 @@ impl<'a> Parser<'a> {
             Field::Text
         };
 
+        self.skip_ws();
+        let filter = if self.peek() == Some('|') {
+            self.bump();
+            self.skip_ws();
+            let mut f = String::new();
+            while let Some(c) = self.peek() {
+                if c.is_alphanumeric() || c == '_' {
+                    f.push(c);
+                    self.bump();
+                } else {
+                    break;
+                }
+            }
+            match f.as_str() {
+                "num" => Some(Filter::Num),
+                "" => return Err("template: expected a filter name after '|'".into()),
+                other => {
+                    return Err(format!(
+                        "template: unknown filter {other:?} (available: num)"
+                    ));
+                }
+            }
+        } else {
+            None
+        };
+
         let selector = if selector_src.is_empty() || selector_src == "." {
             None
         } else {
@@ -233,7 +268,11 @@ impl<'a> Parser<'a> {
         };
 
         let _ = self.src; // keep lifetime used
-        Ok(Template::Expr { selector, field })
+        Ok(Template::Expr {
+            selector,
+            field,
+            filter,
+        })
     }
 }
 
@@ -247,7 +286,11 @@ pub fn eval(t: &Template, ctx: ElementRef, base: Option<&str>) -> Value {
             Value::Object(map)
         }
         Template::Array(inner) => match inner.as_ref() {
-            Template::Expr { selector, field } => {
+            Template::Expr {
+                selector,
+                field,
+                filter,
+            } => {
                 let els: Vec<ElementRef> = match selector {
                     Some(sel) => ctx.select(sel).collect(),
                     None => vec![ctx],
@@ -255,6 +298,7 @@ pub fn eval(t: &Template, ctx: ElementRef, base: Option<&str>) -> Value {
                 Value::Array(
                     els.into_iter()
                         .filter_map(|el| field_value(el, field, base))
+                        .filter_map(|v| apply_filter(v, *filter))
                         .collect(),
                 )
             }
@@ -264,15 +308,82 @@ pub fn eval(t: &Template, ctx: ElementRef, base: Option<&str>) -> Value {
             // over ctx children matching nothing — instead treat as single eval.
             other => Value::Array(vec![eval(other, ctx, base)]),
         },
-        Template::Expr { selector, field } => {
+        Template::Expr {
+            selector,
+            field,
+            filter,
+        } => {
             let el = match selector {
                 Some(sel) => ctx.select(sel).next(),
                 None => Some(ctx),
             };
             el.and_then(|el| field_value(el, field, base))
+                .and_then(|v| apply_filter(v, *filter))
                 .unwrap_or(Value::Null)
         }
     }
+}
+
+/// Apply an optional post-filter to an extracted value.
+fn apply_filter(v: Value, filter: Option<Filter>) -> Option<Value> {
+    match filter {
+        None => Some(v),
+        Some(Filter::Num) => match &v {
+            Value::String(s) => first_number(s),
+            _ => Some(v),
+        },
+    }
+}
+
+/// Find the first number in a string. Commas between digits are treated as
+/// thousands separators ("1,234 points" → 1234); "$3.50" → 3.5; "-5" → -5.
+fn first_number(s: &str) -> Option<Value> {
+    let chars: Vec<char> = s.chars().collect();
+    let mut i = 0;
+    while i < chars.len() {
+        let neg = chars[i] == '-' && i + 1 < chars.len() && chars[i + 1].is_ascii_digit();
+        if neg || chars[i].is_ascii_digit() {
+            let mut buf = String::new();
+            if neg {
+                buf.push('-');
+                i += 1;
+            }
+            let mut seen_dot = false;
+            while i < chars.len() {
+                let c = chars[i];
+                if c.is_ascii_digit() {
+                    buf.push(c);
+                    i += 1;
+                } else if c == ','
+                    && i + 1 < chars.len()
+                    && chars[i + 1].is_ascii_digit()
+                    && !seen_dot
+                {
+                    i += 1; // thousands separator: skip
+                } else if c == '.'
+                    && !seen_dot
+                    && i + 1 < chars.len()
+                    && chars[i + 1].is_ascii_digit()
+                {
+                    seen_dot = true;
+                    buf.push('.');
+                    i += 1;
+                } else {
+                    break;
+                }
+            }
+            return if seen_dot {
+                buf.parse::<f64>()
+                    .ok()
+                    .and_then(serde_json::Number::from_f64)
+                    .map(Value::Number)
+            } else {
+                buf.parse::<i64>().ok().map(|n| Value::Number(n.into()))
+            };
+        }
+        i += 1;
+    }
+    None
 }
 
 fn field_value(el: ElementRef, field: &Field, base: Option<&str>) -> Option<Value> {
@@ -346,5 +457,47 @@ mod tests {
         assert!(parse_template("{a: }").is_err());
         assert!(parse_template("{a: b").is_err());
         assert!(parse_template("").is_err());
+        assert!(parse_template("{a: b | }").is_err());
+        assert!(parse_template("{a: b | nope}").is_err());
+    }
+
+    #[test]
+    fn num_filter() {
+        let html = Html::parse_document(
+            r#"<div class="post">
+                 <span class="pts">1,234 points</span>
+                 <span class="price">$3.50</span>
+                 <span class="delta">-5 today</span>
+                 <span class="none">no digits here</span>
+               </div>"#,
+        );
+        let root = html
+            .select(&Selector::parse(".post").unwrap())
+            .next()
+            .unwrap();
+        let t =
+            parse_template("{pts: .pts | num, price: .price|num, d: .delta | num, n: .none | num}")
+                .unwrap();
+        let v = eval(&t, root, None);
+        assert_eq!(v["pts"], 1234);
+        assert_eq!(v["price"], 3.5);
+        assert_eq!(v["d"], -5);
+        assert_eq!(v["n"], Value::Null);
+    }
+
+    #[test]
+    fn first_number_edges() {
+        assert_eq!(first_number("28"), Some(Value::Number(28.into())));
+        assert_eq!(
+            first_number("v2.0"),
+            serde_json::Number::from_f64(2.0).map(Value::Number)
+        );
+        assert_eq!(
+            first_number("a 10,000,000 b"),
+            Some(Value::Number(10_000_000.into()))
+        );
+        assert_eq!(first_number("1,23"), Some(Value::Number(123.into())));
+        assert_eq!(first_number("-"), None);
+        assert_eq!(first_number(""), None);
     }
 }

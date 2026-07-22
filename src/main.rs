@@ -69,6 +69,10 @@ struct Args {
     /// Generate shell completions (bash, zsh, fish, elvish, powershell) and exit
     #[arg(long, value_name = "SHELL", value_enum, exclusive = true)]
     completions: Option<clap_complete::Shell>,
+
+    /// Print a roff man page to stdout and exit (e.g. `cull --man > cull.1`)
+    #[arg(long, exclusive = true)]
+    man: bool,
 }
 
 fn main() -> ExitCode {
@@ -81,6 +85,15 @@ fn main() -> ExitCode {
     if let Some(shell) = args.completions {
         let mut cmd = <Args as clap::CommandFactory>::command();
         clap_complete::generate(shell, &mut cmd, "cull", &mut std::io::stdout());
+        return ExitCode::SUCCESS;
+    }
+    if args.man {
+        let cmd = <Args as clap::CommandFactory>::command();
+        let man = clap_mangen::Man::new(cmd);
+        if let Err(e) = man.render(&mut std::io::stdout()) {
+            eprintln!("cull: {e}");
+            return ExitCode::from(2);
+        }
         return ExitCode::SUCCESS;
     }
     match run(&args) {

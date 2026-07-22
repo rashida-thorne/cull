@@ -159,3 +159,12 @@ fn completions_generate() {
     assert_eq!(code, 0);
     assert!(out.contains("_cull"));
 }
+
+#[test]
+fn man_page_generates() {
+    let (out, _, code) = cull(&["--man"], None);
+    assert_eq!(code, 0);
+    assert!(out.starts_with(".ie") || out.starts_with(".TH"));
+    assert!(out.contains(".SH NAME"));
+    assert!(out.contains("cull"));
+}

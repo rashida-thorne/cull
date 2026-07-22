@@ -12,6 +12,7 @@ categories = ["command-line-utilities", "parsing", "web-programming"]
 [dependencies]
 clap = { version = "4.6.4", features = ["derive"] }
 clap_complete = "4.6.7"
+clap_mangen = "0.3.0"
 ego-tree = "0.11"
 scraper = "0.27.0"
 serde_json = { version = "1.0.151", features = ["preserve_order"] }

@@ -41,10 +41,17 @@ jobs:
         run: |
           name="cull-${GITHUB_REF_NAME}-${{ matrix.target }}"
           mkdir "$name"
+          cp README.md LICENSE "$name/"
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
             cp "target/${{ matrix.target }}/release/cull.exe" "$name/"
             7z a "$name.zip" "$name"
           else
+            # man page + completions (host build; output is target-independent)
+            cargo run --release -- --man > "$name/cull.1"
+            mkdir "$name/completions"
+            for sh in bash zsh fish; do
+              cargo run --release -- --completions "$sh" > "$name/completions/cull.$sh"
+            done
             cp "target/${{ matrix.target }}/release/cull" "$name/"
             tar czf "$name.tar.gz" "$name"
           fi
