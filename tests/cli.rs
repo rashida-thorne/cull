@@ -152,3 +152,10 @@ fn missing_file_exits_2() {
     let (_, _, code) = cull(&["p", "-t", "/no/such/file.html"], None);
     assert_eq!(code, 2);
 }
+
+#[test]
+fn completions_generate() {
+    let (out, _, code) = cull(&["--completions", "bash"], None);
+    assert_eq!(code, 0);
+    assert!(out.contains("_cull"));
+}

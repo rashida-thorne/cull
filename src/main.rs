@@ -65,10 +65,19 @@ struct Args {
     /// Resolve relative URLs in href/src against this base
     #[arg(short = 'b', long, value_name = "URL")]
     base: Option<String>,
+
+    /// Generate shell completions (bash, zsh, fish, elvish, powershell) and exit
+    #[arg(long, value_name = "SHELL", value_enum, exclusive = true)]
+    completions: Option<clap_complete::Shell>,
 }
 
 fn main() -> ExitCode {
     let args = Args::parse();
+    if let Some(shell) = args.completions {
+        let mut cmd = <Args as clap::CommandFactory>::command();
+        clap_complete::generate(shell, &mut cmd, "cull", &mut std::io::stdout());
+        return ExitCode::SUCCESS;
+    }
     match run(&args) {
         Ok(found) => {
             if found {

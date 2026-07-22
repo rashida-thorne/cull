@@ -37,6 +37,9 @@ cargo install cull
 Prebuilt binaries for Linux/macOS/Windows are on the
 [releases page](https://github.com/rashidathorne/cull/releases).
 
+Shell completions: `cull --completions bash|zsh|fish|elvish|powershell`
+(e.g. `cull --completions zsh > ~/.zfunc/_cull`).
+
 ## Usage
 
 ```
