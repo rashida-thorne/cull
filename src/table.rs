@@ -56,6 +56,11 @@ pub fn run(
 }
 
 /// Expand an HTML table to a rectangular grid, honouring colspan/rowspan.
+///
+/// Multi-row header blocks (two or more leading rows made entirely of `<th>`
+/// cells, as in Wikipedia's unit sub-headers) are collapsed into a single
+/// header row by joining each column's distinct texts, e.g. "Height" + "ft"
+/// becomes "Height ft".
 fn to_grid(table: ElementRef) -> Vec<Vec<String>> {
     let row_sel = Selector::parse("tr").unwrap();
     let cell_sel = Selector::parse("th, td").unwrap();
@@ -70,7 +75,8 @@ fn to_grid(table: ElementRef) -> Vec<Vec<String>> {
         })
         .collect();
 
-    let mut grid: Vec<Vec<Option<String>>> = Vec::new();
+    // Cell = (text, came_from_th)
+    let mut grid: Vec<Vec<Option<(String, bool)>>> = Vec::new();
     for (r, tr) in rows.iter().enumerate() {
         if grid.len() <= r {
             grid.push(Vec::new());
@@ -87,6 +93,7 @@ fn to_grid(table: ElementRef) -> Vec<Vec<String>> {
             }
             let colspan = attr_num(cell, "colspan");
             let rowspan = attr_num(cell, "rowspan");
+            let is_th = cell.value().name() == "th";
             let val = text::collapsed_text(cell);
             for dr in 0..rowspan {
                 let rr = r + dr;
@@ -100,17 +107,48 @@ fn to_grid(table: ElementRef) -> Vec<Vec<String>> {
                     }
                     // Only the top-left of a span carries the value; the rest
                     // are filled with copies so rows stay aligned.
-                    grid[rr][cc] = Some(val.clone());
+                    grid[rr][cc] = Some((val.clone(), is_th));
                 }
             }
             c += colspan;
         }
     }
 
-    grid.into_iter()
-        .map(|row| row.into_iter().map(|c| c.unwrap_or_default()).collect())
-        .filter(|row: &Vec<String>| !row.is_empty())
-        .collect()
+    let grid: Vec<Vec<Option<(String, bool)>>> =
+        grid.into_iter().filter(|row| !row.is_empty()).collect();
+
+    // Count leading rows made entirely of <th> cells.
+    let header_rows = grid
+        .iter()
+        .take_while(|row| row.iter().all(|c| matches!(c, Some((_, true)) | None)))
+        .count();
+
+    let mut out: Vec<Vec<String>> = Vec::new();
+    if header_rows >= 2 {
+        let width = grid[..header_rows].iter().map(Vec::len).max().unwrap_or(0);
+        let merged: Vec<String> = (0..width)
+            .map(|c| {
+                let mut parts: Vec<&str> = Vec::new();
+                for row in &grid[..header_rows] {
+                    if let Some(Some((t, _))) = row.get(c)
+                        && !t.is_empty()
+                        && !parts.contains(&t.as_str())
+                    {
+                        parts.push(t);
+                    }
+                }
+                parts.join(" ")
+            })
+            .collect();
+        out.push(merged);
+    }
+    let skip = if header_rows >= 2 { header_rows } else { 0 };
+    out.extend(grid[skip..].iter().map(|row| {
+        row.iter()
+            .map(|c| c.as_ref().map(|(t, _)| t.clone()).unwrap_or_default())
+            .collect()
+    }));
+    out
 }
 
 fn nearest_table(el: ElementRef) -> Option<ElementRef> {
@@ -151,16 +189,30 @@ fn write_json(grid: &[Vec<String>], pretty: bool, out: &mut impl Write) -> Resul
     if grid.len() < 2 {
         return Ok(());
     }
-    let headers = &grid[0];
+    // Build column keys once, disambiguating blanks and duplicates so no
+    // column silently overwrites another ("Height", "Height_2", ...).
+    let mut keys: Vec<String> = Vec::new();
+    for (i, h) in grid[0].iter().enumerate() {
+        let base = if h.is_empty() {
+            format!("col{}", i + 1)
+        } else {
+            h.clone()
+        };
+        let mut key = base.clone();
+        let mut n = 1;
+        while keys.contains(&key) {
+            n += 1;
+            key = format!("{base}_{n}");
+        }
+        keys.push(key);
+    }
     for row in &grid[1..] {
         let mut obj = Map::new();
-        for (i, h) in headers.iter().enumerate() {
-            let key = if h.is_empty() {
-                format!("col{}", i + 1)
-            } else {
-                h.clone()
-            };
-            obj.insert(key, Value::String(row.get(i).cloned().unwrap_or_default()));
+        for (i, key) in keys.iter().enumerate() {
+            obj.insert(
+                key.clone(),
+                Value::String(row.get(i).cloned().unwrap_or_default()),
+            );
         }
         let v = Value::Object(obj);
         let s = if pretty {
@@ -193,6 +245,36 @@ mod tests {
         assert_eq!(g[0], vec!["A", "B", "B"]);
         assert_eq!(g[1], vec!["1", "2", "3"]);
         assert_eq!(g[2], vec!["1", "4", "5"]);
+    }
+
+    #[test]
+    fn multi_row_headers_merge() {
+        // Wikipedia-style: unit sub-header row under a spanned header.
+        let html = Html::parse_document(
+            r#"<table>
+                <tr><th rowspan="2">Name</th><th colspan="2">Height</th></tr>
+                <tr><th>m</th><th>ft</th></tr>
+                <tr><td>Burj Khalifa</td><td>828</td><td>2717</td></tr>
+               </table>"#,
+        );
+        let sel = Selector::parse("table").unwrap();
+        let t = html.select(&sel).next().unwrap();
+        let g = to_grid(t);
+        assert_eq!(g.len(), 2);
+        assert_eq!(g[0], vec!["Name", "Height m", "Height ft"]);
+        assert_eq!(g[1], vec!["Burj Khalifa", "828", "2717"]);
+    }
+
+    #[test]
+    fn json_keys_deduped() {
+        let grid = vec![
+            vec!["".into(), "X".into(), "X".into()],
+            vec!["a".into(), "b".into(), "c".into()],
+        ];
+        let mut buf = Vec::new();
+        write_json(&grid, false, &mut buf).unwrap();
+        let s = String::from_utf8(buf).unwrap();
+        assert_eq!(s.trim(), r#"{"col1":"a","X":"b","X_2":"c"}"#);
     }
 
     #[test]
