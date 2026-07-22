@@ -88,6 +88,10 @@ impl<'a> Renderer<'a> {
                 // Inline code, unless we're inside <pre> (handled there).
                 let t: String = el.text().collect();
                 let fence = if t.contains('`') { "``" } else { "`" };
+                // Two adjacent code spans would merge (`a``b`); keep a space.
+                if self.out.ends_with('`') {
+                    self.out.push(' ');
+                }
                 self.out.push_str(fence);
                 self.out.push_str(t.trim_matches('\n'));
                 self.out.push_str(fence);
@@ -239,6 +243,14 @@ impl<'a> Renderer<'a> {
         if t.is_empty() {
             return;
         }
+        // Adjacent emphasis spans with no separating text would glue their
+        // delimiters (`**bold***italic*`), which CommonMark misparses. Swap
+        // to the underscore form when the buffer already ends with `*`.
+        let mark = if mark.starts_with('*') && self.out.ends_with('*') {
+            if mark == "**" { "__" } else { "_" }
+        } else {
+            mark
+        };
         self.out.push_str(mark);
         self.out.push_str(&t);
         self.out.push_str(mark);
@@ -350,6 +362,22 @@ mod tests {
     fn inline_code() {
         let m = md("<p>run <code>ls -la</code> now</p>");
         assert_eq!(m, "run `ls -la` now");
+    }
+
+    #[test]
+    fn adjacent_emphasis_does_not_glue() {
+        let m = md("<p><b>bold</b><i>italic</i></p>");
+        assert_eq!(m, "**bold**_italic_");
+        let m = md("<p><i>a</i><i>b</i></p>");
+        assert_eq!(m, "*a*_b_");
+        let m = md("<p><i>a</i><b>b</b></p>");
+        assert_eq!(m, "*a*__b__");
+    }
+
+    #[test]
+    fn adjacent_code_spans_do_not_merge() {
+        let m = md("<p><code>a</code><code>b</code></p>");
+        assert_eq!(m, "`a` `b`");
     }
 
     #[test]
