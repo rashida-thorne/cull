@@ -40,8 +40,13 @@ actually needs to go:
 cargo install cull
 ```
 
-Prebuilt binaries for Linux/macOS/Windows are on the
-[releases page](https://github.com/rashidathorne/cull/releases).
+Or grab a prebuilt binary (Linux x86_64/arm64 fully static, macOS, Windows)
+from the [releases page](https://github.com/rashidathorne/cull/releases) — or
+let the install script pick the right one:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/rashidathorne/cull/main/scripts/install.sh | sh
+```
 
 Shell completions: `cull --completions bash|zsh|fish|elvish|powershell`
 (e.g. `cull --completions zsh > ~/.zfunc/_cull`).
