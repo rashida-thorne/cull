@@ -119,7 +119,13 @@ impl<'a> Renderer<'a> {
                 self.block_end();
             }
             "a" => {
-                let label = inline_text(el);
+                // Render the label by walking children so nested markup
+                // survives (<a><code>x</code></a> -> [`x`](url), images
+                // become [![alt](src)](url)).
+                let start = self.out.len();
+                self.walk_children(*el);
+                let label = self.out[start..].trim().replace('\n', " ");
+                self.out.truncate(start);
                 match el.value().attr("href") {
                     Some(href) if !label.is_empty() => {
                         let href = match self.base {
@@ -239,10 +245,6 @@ impl<'a> Renderer<'a> {
     }
 
     fn wrap_inline(&mut self, el: ElementRef, mark: &str) {
-        let t = inline_text(el);
-        if t.is_empty() {
-            return;
-        }
         // Adjacent emphasis spans with no separating text would glue their
         // delimiters (`**bold***italic*`), which CommonMark misparses. Swap
         // to the underscore form when the buffer already ends with `*`.
@@ -251,9 +253,36 @@ impl<'a> Renderer<'a> {
         } else {
             mark
         };
+        // Render children into the buffer so nested markup survives
+        // (e.g. <strong><code>x</code></strong> -> **`x`**), then wrap.
+        let start = self.out.len();
         self.out.push_str(mark);
-        self.out.push_str(&t);
+        let content_start = self.out.len();
+        self.walk_children(*el);
+        if self.out[content_start..].trim().is_empty() {
+            // Whitespace-only emphasis: drop the marks but keep one
+            // separating space so surrounding words don't fuse.
+            let had_ws = self.out[content_start..].contains(char::is_whitespace);
+            self.out.truncate(start);
+            if had_ws && !self.out.is_empty() && !self.out.ends_with([' ', '\n']) {
+                self.out.push(' ');
+            }
+            return;
+        }
+        // CommonMark forbids whitespace just inside emphasis delimiters;
+        // move any leading/trailing whitespace outside the marks.
+        let inner = &self.out[content_start..];
+        let lead = inner.len() - inner.trim_start().len();
+        if lead > 0 {
+            let ws = self.out[content_start..content_start + lead].to_string();
+            self.out
+                .replace_range(start..content_start + lead, &format!("{ws}{mark}"));
+        }
+        let trail_start = self.out.trim_end().len();
+        let ws = self.out[trail_start..].to_string();
+        self.out.truncate(trail_start);
         self.out.push_str(mark);
+        self.out.push_str(&ws);
     }
 
     fn push_inline_text(&mut self, t: &str) {
@@ -378,6 +407,32 @@ mod tests {
     fn adjacent_code_spans_do_not_merge() {
         let m = md("<p><code>a</code><code>b</code></p>");
         assert_eq!(m, "`a` `b`");
+    }
+
+    #[test]
+    fn nested_markup_survives_emphasis() {
+        // <code> inside <strong> must keep its backticks, or renderers
+        // treat literal tags like <table> as raw HTML and swallow them.
+        let m = md("<p>The <strong><code>&lt;table&gt;</code></strong> element</p>");
+        assert_eq!(m, "The **`<table>`** element");
+        let m = md("<p><em><strong>both</strong></em></p>");
+        assert_eq!(m, "*__both__*");
+    }
+
+    #[test]
+    fn nested_markup_survives_links() {
+        let m = md(r#"<p><a href="/x"><code>foo()</code></a></p>"#);
+        assert_eq!(m, "[`foo()`](https://ex.com/x)");
+        let m = md(r#"<p><a href="/y"><img src="b.png" alt="CI"></a></p>"#);
+        assert_eq!(m, "[![CI](https://ex.com/dir/b.png)](https://ex.com/y)");
+    }
+
+    #[test]
+    fn emphasis_whitespace_moves_outside_delimiters() {
+        let m = md("<p>a<strong> b </strong>c</p>");
+        assert_eq!(m, "a **b** c");
+        let m = md("<p>x<em>  </em>y</p>");
+        assert_eq!(m, "x y");
     }
 
     #[test]
