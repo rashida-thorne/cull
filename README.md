@@ -41,11 +41,11 @@ cargo install cull
 ```
 
 Or grab a prebuilt binary (Linux x86_64/arm64 fully static, macOS, Windows)
-from the [releases page](https://github.com/rashidathorne/cull/releases) — or
+from the [releases page](https://github.com/rashida-thorne/cull/releases) — or
 let the install script pick the right one:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rashidathorne/cull/main/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/rashida-thorne/cull/main/scripts/install.sh | sh
 ```
 
 Shell completions: `cull --completions bash|zsh|fish|elvish|powershell`

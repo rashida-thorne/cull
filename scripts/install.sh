@@ -1,14 +1,14 @@
 #!/bin/sh
 # cull installer — downloads the latest prebuilt binary from GitHub releases.
 #
-#   curl -fsSL https://raw.githubusercontent.com/rashidathorne/cull/main/scripts/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/rashida-thorne/cull/main/scripts/install.sh | sh
 #
 # Options (env vars):
 #   CULL_INSTALL_DIR  install directory (default: ~/.local/bin, or /usr/local/bin if run as root)
 #   CULL_VERSION      version tag to install, e.g. v0.1.0 (default: latest)
 set -eu
 
-REPO="rashidathorne/cull"
+REPO="rashida-thorne/cull"
 
 err() { printf 'install.sh: %s\n' "$1" >&2; exit 1; }
 
