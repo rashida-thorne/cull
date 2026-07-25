@@ -25,8 +25,8 @@ struct Args {
     /// CSS selector (omit with --table/--md to use the whole document)
     selector: Option<String>,
 
-    /// Input file or URL (default: stdin)
-    input: Option<String>,
+    /// Input files or URLs (default: stdin; use - for stdin explicitly)
+    inputs: Vec<String>,
 
     /// Print collapsed text content of matches
     #[arg(short = 't', long)]
@@ -64,9 +64,13 @@ struct Args {
     #[arg(short = 'p', long)]
     pretty: bool,
 
-    /// Print only the number of matches (like grep -c)
+    /// Print only the number of matches (like grep -c; per input with multiple inputs)
     #[arg(short = 'c', long)]
     count: bool,
+
+    /// Print only the names of inputs with at least one match (like grep -l)
+    #[arg(short = 'l', long)]
+    files_with_matches: bool,
 
     /// Remove nodes matching this CSS selector before selecting/output
     /// (repeatable; comma lists work: --remove 'nav, footer, script')
@@ -134,13 +138,9 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
     match run(&args) {
-        Ok(found) => {
-            if found {
-                ExitCode::SUCCESS
-            } else {
-                ExitCode::from(1) // like grep: no matches
-            }
-        }
+        Ok((_, true)) => ExitCode::from(2), // some input failed to read
+        Ok((true, false)) => ExitCode::SUCCESS,
+        Ok((false, false)) => ExitCode::from(1), // like grep: no matches
         Err(e) => {
             eprintln!("cull: {e}");
             ExitCode::from(2)
@@ -148,17 +148,17 @@ fn main() -> ExitCode {
     }
 }
 
-fn read_input(input: &Option<String>) -> Result<String, String> {
-    match input.as_deref() {
-        None | Some("-") => {
+fn read_input(input: &str) -> Result<String, String> {
+    match input {
+        "-" => {
             let mut buf = Vec::new();
             std::io::stdin()
                 .read_to_end(&mut buf)
                 .map_err(|e| format!("reading stdin: {e}"))?;
             Ok(decode::decode_html(&buf, None))
         }
-        Some(path) if path.starts_with("http://") || path.starts_with("https://") => fetch(path),
-        Some(path) => {
+        path if path.starts_with("http://") || path.starts_with("https://") => fetch(path),
+        path => {
             let buf = std::fs::read(path).map_err(|e| format!("{path}: {e}"))?;
             Ok(decode::decode_html(&buf, None))
         }
@@ -182,147 +182,197 @@ fn fetch(url: &str) -> Result<String, String> {
     Ok(decode::decode_html(&bytes, header_charset.as_deref()))
 }
 
-fn run(args: &Args) -> Result<bool, String> {
-    // If the second positional is missing but the first looks like a file/URL
-    // and a doc-level mode is on, treat the selector as the input.
-    let (selector_src, input) = disambiguate(args);
+/// Returns (any_match_found, any_input_error).
+fn run(args: &Args) -> Result<(bool, bool), String> {
+    // If the first positional looks like a file/URL and a doc-level mode is
+    // on, treat it as an input rather than a selector.
+    let (selector_src, inputs) = disambiguate(args);
 
-    let html_src = read_input(&input)?;
-    let mut doc = Html::parse_document(&html_src);
-
-    // --remove: detach matching nodes before any selection or conversion.
-    for sel_src in &args.remove {
-        let sel = Selector::parse(sel_src)
-            .map_err(|e| format!("invalid --remove selector {sel_src:?}: {e}"))?;
-        let ids: Vec<_> = doc.select(&sel).map(|el| el.id()).collect();
-        for id in ids {
-            if let Some(mut node) = doc.tree.get_mut(id) {
-                node.detach();
-            }
-        }
-    }
-    let doc = doc;
-
-    // Auto-base: if input was a URL and --base not given, use it.
-    let base = args.base.clone().or_else(|| {
-        input
-            .as_deref()
-            .filter(|s| s.starts_with("http://") || s.starts_with("https://"))
-            .map(|s| s.to_string())
-    });
-
-    let matches: Vec<ElementRef> = match &selector_src {
-        Some(sel_src) => {
-            let sel = Selector::parse(sel_src)
-                .map_err(|e| format!("invalid selector {sel_src:?}: {e}"))?;
-            doc.select(&sel).collect()
-        }
-        None => vec![doc.root_element()],
+    // Parse selectors and templates once, up front (errors here are fatal).
+    let selector = match &selector_src {
+        Some(s) => Some(Selector::parse(s).map_err(|e| format!("invalid selector {s:?}: {e}"))?),
+        None => None,
+    };
+    let remove_sels: Vec<Selector> = args
+        .remove
+        .iter()
+        .map(|s| Selector::parse(s).map_err(|e| format!("invalid --remove selector {s:?}: {e}")))
+        .collect::<Result<_, _>>()?;
+    let json_tmpl = match &args.json {
+        Some(t) => Some(extract::parse_template(t)?),
+        None => None,
     };
 
-    let matches: Vec<ElementRef> = if args.first {
-        matches.into_iter().take(1).collect()
+    let inputs: Vec<String> = if inputs.is_empty() {
+        vec!["-".to_string()]
     } else {
-        matches
+        inputs
     };
+    let multi = inputs.len() > 1;
+    let colorize = args.color.enabled();
 
     let stdout = std::io::stdout();
     let mut out = stdout.lock();
 
-    if args.count {
-        writeln!(out, "{}", matches.len()).map_err(io_err)?;
-        return Ok(!matches.is_empty());
+    let mut found_any = false;
+    let mut had_error = false;
+    // With --json --array, matches from all inputs merge into one array.
+    let mut array_acc: Vec<serde_json::Value> = Vec::new();
+
+    for input in &inputs {
+        let html_src = match read_input(input) {
+            Ok(s) => s,
+            Err(e) => {
+                // Like grep: report, keep going, exit 2 at the end.
+                eprintln!("cull: {e}");
+                had_error = true;
+                continue;
+            }
+        };
+        let mut doc = Html::parse_document(&html_src);
+
+        // --remove: detach matching nodes before any selection or conversion.
+        for sel in &remove_sels {
+            let ids: Vec<_> = doc.select(sel).map(|el| el.id()).collect();
+            for id in ids {
+                if let Some(mut node) = doc.tree.get_mut(id) {
+                    node.detach();
+                }
+            }
+        }
+        let doc = doc;
+
+        // Auto-base: if this input is a URL and --base not given, use it.
+        let base = args.base.clone().or_else(|| {
+            (input.starts_with("http://") || input.starts_with("https://")).then(|| input.clone())
+        });
+
+        let matches: Vec<ElementRef> = match &selector {
+            Some(sel) => doc.select(sel).collect(),
+            None => vec![doc.root_element()],
+        };
+
+        // --first applies per input, like grep -m1.
+        let matches: Vec<ElementRef> = if args.first {
+            matches.into_iter().take(1).collect()
+        } else {
+            matches
+        };
+
+        if args.files_with_matches {
+            if !matches.is_empty() {
+                found_any = true;
+                writeln!(out, "{input}").map_err(io_err)?;
+            }
+            continue;
+        }
+
+        if args.count {
+            if multi {
+                writeln!(out, "{input}:{}", matches.len()).map_err(io_err)?;
+            } else {
+                writeln!(out, "{}", matches.len()).map_err(io_err)?;
+            }
+            found_any |= !matches.is_empty();
+            continue;
+        }
+
+        let found = if args.table {
+            table::run(
+                &matches,
+                selector.is_some(),
+                args.json_rows,
+                args.pretty,
+                &mut out,
+            )?
+        } else if args.md {
+            let mut any = false;
+            for m in &matches {
+                let md = markdown::element_to_markdown(*m, base.as_deref());
+                if !md.trim().is_empty() {
+                    any = true;
+                    writeln!(out, "{}", md.trim_end()).map_err(io_err)?;
+                }
+            }
+            any
+        } else if let Some(tmpl) = &json_tmpl {
+            let values: Vec<serde_json::Value> = matches
+                .iter()
+                .map(|m| extract::eval(tmpl, *m, base.as_deref()))
+                .collect();
+            let any = !values.is_empty();
+            if args.array {
+                array_acc.extend(values);
+            } else {
+                for v in values {
+                    writeln!(out, "{}", fmt_json(&v, args.pretty)).map_err(io_err)?;
+                }
+            }
+            any
+        } else if let Some(attr) = &args.attr {
+            let mut any = false;
+            for m in &matches {
+                if let Some(v) = m.value().attr(attr) {
+                    any = true;
+                    let v = text::maybe_resolve(attr, v, base.as_deref());
+                    writeln!(out, "{v}").map_err(io_err)?;
+                }
+            }
+            any
+        } else if args.text {
+            let mut any = false;
+            for m in &matches {
+                let t = text::collapsed_text(*m);
+                if !t.is_empty() {
+                    any = true;
+                    writeln!(out, "{t}").map_err(io_err)?;
+                }
+            }
+            any
+        } else {
+            let mut any = false;
+            for m in &matches {
+                any = true;
+                if args.pretty {
+                    writeln!(out, "{}", serialize::element_to_pretty_html(*m, colorize))
+                        .map_err(io_err)?;
+                } else if colorize {
+                    writeln!(out, "{}", serialize::element_to_colored_html(*m)).map_err(io_err)?;
+                } else {
+                    writeln!(out, "{}", m.html()).map_err(io_err)?;
+                }
+            }
+            any
+        };
+        found_any |= found;
     }
 
-    let found = if args.table {
-        table::run(
-            &matches,
-            selector_src.is_some(),
-            args.json_rows,
-            args.pretty,
-            &mut out,
-        )?
-    } else if args.md {
-        let mut any = false;
-        for m in &matches {
-            let md = markdown::element_to_markdown(*m, base.as_deref());
-            if !md.trim().is_empty() {
-                any = true;
-                writeln!(out, "{}", md.trim_end()).map_err(io_err)?;
-            }
-        }
-        any
-    } else if let Some(template) = &args.json {
-        let tmpl = extract::parse_template(template)?;
-        let values: Vec<serde_json::Value> = matches
-            .iter()
-            .map(|m| extract::eval(&tmpl, *m, base.as_deref()))
-            .collect();
-        let any = !values.is_empty();
-        if args.array {
-            let v = serde_json::Value::Array(values);
-            writeln!(out, "{}", fmt_json(&v, args.pretty)).map_err(io_err)?;
-        } else {
-            for v in values {
-                writeln!(out, "{}", fmt_json(&v, args.pretty)).map_err(io_err)?;
-            }
-        }
-        any
-    } else if let Some(attr) = &args.attr {
-        let mut any = false;
-        for m in &matches {
-            if let Some(v) = m.value().attr(attr) {
-                any = true;
-                let v = text::maybe_resolve(attr, v, base.as_deref());
-                writeln!(out, "{v}").map_err(io_err)?;
-            }
-        }
-        any
-    } else if args.text {
-        let mut any = false;
-        for m in &matches {
-            let t = text::collapsed_text(*m);
-            if !t.is_empty() {
-                any = true;
-                writeln!(out, "{t}").map_err(io_err)?;
-            }
-        }
-        any
-    } else {
-        let colorize = args.color.enabled();
-        let mut any = false;
-        for m in &matches {
-            any = true;
-            if args.pretty {
-                writeln!(out, "{}", serialize::element_to_pretty_html(*m, colorize))
-                    .map_err(io_err)?;
-            } else if colorize {
-                writeln!(out, "{}", serialize::element_to_colored_html(*m)).map_err(io_err)?;
-            } else {
-                writeln!(out, "{}", m.html()).map_err(io_err)?;
-            }
-        }
-        any
-    };
+    if json_tmpl.is_some() && args.array && !args.count && !args.files_with_matches {
+        let v = serde_json::Value::Array(array_acc);
+        writeln!(out, "{}", fmt_json(&v, args.pretty)).map_err(io_err)?;
+    }
 
-    Ok(found)
+    Ok((found_any, had_error))
 }
 
-/// `cull --md page.html` puts the input in the selector slot; fix that up.
-fn disambiguate(args: &Args) -> (Option<String>, Option<String>) {
-    match (&args.selector, &args.input) {
-        (Some(s), None) if args.table || args.md => {
+/// `cull --md page.html [more.html ...]` puts an input in the selector slot;
+/// fix that up.
+fn disambiguate(args: &Args) -> (Option<String>, Vec<String>) {
+    match &args.selector {
+        Some(s) if args.table || args.md => {
             let looks_like_input = s.starts_with("http://")
                 || s.starts_with("https://")
                 || s == "-"
                 || std::path::Path::new(s).exists();
             if looks_like_input {
-                (None, Some(s.clone()))
+                let mut inputs = vec![s.clone()];
+                inputs.extend(args.inputs.iter().cloned());
+                (None, inputs)
             } else {
-                (Some(s.clone()), None)
+                (Some(s.clone()), args.inputs.clone())
             }
         }
-        (s, i) => (s.clone(), i.clone()),
+        s => (s.clone(), args.inputs.clone()),
     }
 }
 

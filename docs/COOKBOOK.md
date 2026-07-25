@@ -143,6 +143,26 @@ $ cull '#main' page.html | cull table --table
 
 ---
 
+## 8. Working over many files
+
+Globs behave like grep: output concatenates, `-c` and `-l` go per-file.
+
+```console
+$ cull 'img:not([alt])' -c site/**/*.html      # alt-text audit
+site/index.html:0
+site/blog/post1.html:4
+
+$ cull 'a[href^="http:"]' -l site/**/*.html    # pages with insecure links
+site/legacy.html
+
+$ cull '.product' -j '{name: h2, price: .price}' snapshots/*.html \
+    | jq -s 'sort_by(.price)'                  # merge a crawl into one dataset
+```
+
+Unreadable files are reported on stderr and skipped (final exit code 2).
+
+---
+
 ## Template syntax refresher
 
 ```

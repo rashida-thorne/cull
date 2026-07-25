@@ -288,3 +288,148 @@ fn count_respects_remove() {
     let (out, _, _) = cull(&["p", "-c", "-r", ".a"], Some(html));
     assert_eq!(out, "1\n");
 }
+
+#[test]
+fn multiple_inputs_concatenate_output() {
+    let (out, _, code) = cull(
+        &[
+            "a",
+            "-t",
+            &fixture("multi_a.html"),
+            &fixture("multi_b.html"),
+        ],
+        None,
+    );
+    assert_eq!(out, "A\nB\nC\n");
+    assert_eq!(code, 0);
+}
+
+#[test]
+fn multiple_inputs_count_per_file() {
+    let (out, _, code) = cull(
+        &[
+            "a",
+            "-c",
+            &fixture("multi_a.html"),
+            &fixture("multi_b.html"),
+        ],
+        None,
+    );
+    assert_eq!(
+        out,
+        format!(
+            "{}:1\n{}:2\n",
+            fixture("multi_a.html"),
+            fixture("multi_b.html")
+        )
+    );
+    assert_eq!(code, 0);
+}
+
+#[test]
+fn single_input_count_stays_bare() {
+    let (out, _, code) = cull(&["a", "-c", &fixture("multi_b.html")], None);
+    assert_eq!(out, "2\n");
+    assert_eq!(code, 0);
+}
+
+#[test]
+fn files_with_matches_lists_only_matching_inputs() {
+    let (out, _, code) = cull(
+        &[
+            "div a",
+            "-l",
+            &fixture("multi_a.html"),
+            &fixture("multi_b.html"),
+        ],
+        None,
+    );
+    assert_eq!(out, format!("{}\n", fixture("multi_b.html")));
+    assert_eq!(code, 0);
+}
+
+#[test]
+fn files_with_matches_no_match_exits_one() {
+    let (out, _, code) = cull(
+        &[
+            "video",
+            "-l",
+            &fixture("multi_a.html"),
+            &fixture("multi_b.html"),
+        ],
+        None,
+    );
+    assert_eq!(out, "");
+    assert_eq!(code, 1);
+}
+
+#[test]
+fn first_applies_per_input() {
+    let (out, _, code) = cull(
+        &[
+            "a",
+            "-t",
+            "-1",
+            &fixture("multi_a.html"),
+            &fixture("multi_b.html"),
+        ],
+        None,
+    );
+    assert_eq!(out, "A\nB\n");
+    assert_eq!(code, 0);
+}
+
+#[test]
+fn json_array_merges_across_inputs() {
+    let (out, _, code) = cull(
+        &[
+            "a",
+            "-j",
+            "{u: @href}",
+            "--array",
+            &fixture("multi_a.html"),
+            &fixture("multi_b.html"),
+        ],
+        None,
+    );
+    assert_eq!(out, "[{\"u\":\"/a\"},{\"u\":\"/b\"},{\"u\":\"/c\"}]\n");
+    assert_eq!(code, 0);
+}
+
+#[test]
+fn unreadable_input_reports_continues_and_exits_two() {
+    let (out, err, code) = cull(
+        &[
+            "a",
+            "-t",
+            &fixture("multi_a.html"),
+            &fixture("no_such_file.html"),
+            &fixture("multi_b.html"),
+        ],
+        None,
+    );
+    assert_eq!(out, "A\nB\nC\n");
+    assert!(err.contains("no_such_file.html"));
+    assert_eq!(code, 2);
+}
+
+#[test]
+fn md_mode_accepts_multiple_bare_inputs() {
+    // Both positionals look like files; --md must treat them all as inputs.
+    let (out, _, code) = cull(
+        &["--md", &fixture("multi_a.html"), &fixture("multi_b.html")],
+        None,
+    );
+    assert_eq!(out, "- [A](/a)\n[B](/b)[C](/c)\n");
+    assert_eq!(code, 0);
+}
+
+#[test]
+fn stdin_dash_mixes_with_files() {
+    let (out, _, code) = cull(
+        &["a", "-t", "-", &fixture("multi_b.html")],
+        Some("<a href=x>S</a>"),
+    );
+    assert_eq!(out, "S\nB\nC\n");
+    assert_eq!(code, 0);
+}

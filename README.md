@@ -64,10 +64,11 @@ Man page: `cull --man > cull.1` (or `cull --man | man -l -` to read it now).
 ## Usage
 
 ```
-cull [SELECTOR] [INPUT] [flags]
+cull [SELECTOR] [INPUT...] [flags]
 ```
 
-`INPUT` is a file, a URL, or `-`/omitted for stdin.
+Each `INPUT` is a file, a URL, or `-` for stdin (stdin is the default when no
+inputs are given). Globs just work: `cull 'a' -a href pages/*.html`.
 
 ### Output modes
 
@@ -155,14 +156,35 @@ in templates, and links/images in `--md`.
 
 ### Other flags
 
-- `-1, --first` — only the first match
-- `-c, --count` — print only the number of matches (like `grep -c`)
+- `-1, --first` — only the first match (per input)
+- `-c, --count` — print only the number of matches (like `grep -c`;
+  `file:count` lines when given multiple inputs)
+- `-l, --files-with-matches` — print only the names of inputs with at least
+  one match (like `grep -l`)
 - `-r, --remove SEL` — delete matching nodes first (repeatable)
 - `--array` — wrap `-j` output in a single JSON array
 - `-p, --pretty` — pretty-print: indented HTML, or indented JSON with `-j`/`--table`
 - `-b, --base URL` — base for resolving relative URLs
 - `--color WHEN` — colorize HTML output: `auto` (default: only on a TTY,
   respects [`NO_COLOR`](https://no-color.org)), `always`, `never`
+
+### Multiple inputs
+
+Pass as many files/URLs as you like — output is concatenated in order, and
+`-c` / `-l` go per-file, grep-style:
+
+```sh
+$ cull '.error' -c logs/*.html
+logs/day1.html:0
+logs/day2.html:3
+
+$ cull 'meta[name=generator]' -l snapshots/*.html   # which pages leak it?
+snapshots/blog.html
+```
+
+An unreadable input is reported on stderr and the rest still run (exit `2`
+at the end, like grep). With `-j --array`, matches from all inputs merge
+into one array.
 
 ### Exit codes
 
@@ -207,6 +229,7 @@ with side-by-side command tables.
 | colored HTML output | ✓ | — | ✓ (TTY auto-detect, `NO_COLOR`) |
 | pretty-printed HTML | always | — | opt-in (`-p`) |
 | fetch URLs directly | — | — | ✓ |
+| multiple inputs / globs (`-c`, `-l` per file) | — | — | ✓ |
 | resolve relative URLs | — | ✓ (`-b`) | ✓ (auto for URLs) |
 | non-UTF-8 pages (Shift_JIS, KOI8-R, …) | ✓ | mojibake | ✓ (BOM + header + `<meta>` sniff) |
 | maintained | unmaintained | stale | ✓ |
