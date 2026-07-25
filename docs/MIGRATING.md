@@ -16,7 +16,7 @@ just pass the URL as the input argument (relative links resolve automatically).
 | `htmlq 'a' -a href --base URL` | `cull 'a' -a href -b URL` (automatic when the input *is* a URL) |
 | `htmlq --remove-nodes nav 'a'` | `cull 'a' -r nav` |
 | `htmlq 'a' --filename page.html` | `cull 'a' page.html` |
-| `htmlq --pretty '#main'` | `cull '#main'` (colored on a TTY; `--color always` to force) |
+| `htmlq --pretty '#main'` | `cull -p '#main'` (indented; colored on a TTY) |
 
 Things htmlq has no equivalent for:
 
@@ -46,6 +46,7 @@ header, and `<meta charset>`.
 | `pup 'a json{}'` | `cull 'a' -j '{...}'` — you name the fields you want |
 | `pup -f page.html 'a'` | `cull 'a' page.html` |
 | `pup --color 'div'` | `cull 'div'` (auto on TTY) |
+| pup's always-indented output | `cull -p 'div'` (indentation is opt-in) |
 | `pup 'div slice{0,1}'` | `cull 'div' -1` (or CSS `:nth-child` / `:nth-of-type`) |
 
 Differences worth knowing:
@@ -55,6 +56,8 @@ Differences worth knowing:
   for the common cases.
 - pup prints each text node on its own line in `text{}`; cull collapses
   whitespace per match (one line per match).
+- pup always re-indents HTML; cull emits it verbatim unless you pass `-p`
+  (and `-p` never reformats inside `pre`, `textarea`, `script`, or `style`).
 - cull exits `1` when nothing matched (grep-style), which makes shell
   conditionals work: `if cull '.error' -t page.html >/dev/null; then ...`
 

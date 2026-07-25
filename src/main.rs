@@ -1,7 +1,7 @@
-mod color;
 mod decode;
 mod extract;
 mod markdown;
+mod serialize;
 mod table;
 mod text;
 
@@ -60,9 +60,13 @@ struct Args {
     #[arg(long)]
     array: bool,
 
-    /// Pretty-print JSON output
+    /// Pretty-print output: indented HTML, or indented JSON with --json/--table
     #[arg(short = 'p', long)]
     pretty: bool,
+
+    /// Print only the number of matches (like grep -c)
+    #[arg(short = 'c', long)]
+    count: bool,
 
     /// Remove nodes matching this CSS selector before selecting/output
     /// (repeatable; comma lists work: --remove 'nav, footer, script')
@@ -225,6 +229,11 @@ fn run(args: &Args) -> Result<bool, String> {
     let stdout = std::io::stdout();
     let mut out = stdout.lock();
 
+    if args.count {
+        writeln!(out, "{}", matches.len()).map_err(io_err)?;
+        return Ok(!matches.is_empty());
+    }
+
     let found = if args.table {
         table::run(
             &matches,
@@ -284,8 +293,11 @@ fn run(args: &Args) -> Result<bool, String> {
         let mut any = false;
         for m in &matches {
             any = true;
-            if colorize {
-                writeln!(out, "{}", color::element_to_colored_html(*m)).map_err(io_err)?;
+            if args.pretty {
+                writeln!(out, "{}", serialize::element_to_pretty_html(*m, colorize))
+                    .map_err(io_err)?;
+            } else if colorize {
+                writeln!(out, "{}", serialize::element_to_colored_html(*m)).map_err(io_err)?;
             } else {
                 writeln!(out, "{}", m.html()).map_err(io_err)?;
             }

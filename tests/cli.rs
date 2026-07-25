@@ -242,3 +242,49 @@ fn remove_invalid_selector_errors() {
     assert!(err.contains("--remove"));
     assert_eq!(code, 2);
 }
+
+#[test]
+fn pretty_html_is_indented() {
+    let html = "<div id=x><ul><li>one</li><li>two</li></ul></div>";
+    let (out, _, code) = cull(&["div", "--pretty", "--color", "never"], Some(html));
+    assert_eq!(
+        out,
+        "<div id=\"x\">\n  <ul>\n    <li>one</li>\n    <li>two</li>\n  </ul>\n</div>\n"
+    );
+    assert_eq!(code, 0);
+}
+
+#[test]
+fn pretty_html_preserves_pre() {
+    let html = "<div><pre>a\n  b</pre></div>";
+    let (out, _, _) = cull(&["div", "-p", "--color", "never"], Some(html));
+    assert_eq!(out, "<div>\n  <pre>a\n  b</pre>\n</div>\n");
+}
+
+#[test]
+fn pretty_still_means_pretty_json_with_json() {
+    let (out, _, _) = cull(&["div", "-j", "{t: p}", "-p"], Some("<div><p>x</p></div>"));
+    assert!(out.contains("{\n"));
+    assert!(out.contains("\"t\": \"x\""));
+}
+
+#[test]
+fn count_prints_number_of_matches() {
+    let (out, _, code) = cull(&["li", "--count"], Some("<ul><li>a<li>b<li>c</ul>"));
+    assert_eq!(out, "3\n");
+    assert_eq!(code, 0);
+}
+
+#[test]
+fn count_zero_exits_one() {
+    let (out, _, code) = cull(&["p", "-c"], Some("<div>x</div>"));
+    assert_eq!(out, "0\n");
+    assert_eq!(code, 1);
+}
+
+#[test]
+fn count_respects_remove() {
+    let html = "<p class=a>1</p><p>2</p>";
+    let (out, _, _) = cull(&["p", "-c", "-r", ".a"], Some(html));
+    assert_eq!(out, "1\n");
+}

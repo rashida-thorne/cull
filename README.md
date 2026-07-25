@@ -156,9 +156,10 @@ in templates, and links/images in `--md`.
 ### Other flags
 
 - `-1, --first` — only the first match
+- `-c, --count` — print only the number of matches (like `grep -c`)
 - `-r, --remove SEL` — delete matching nodes first (repeatable)
 - `--array` — wrap `-j` output in a single JSON array
-- `-p, --pretty` — pretty-print JSON
+- `-p, --pretty` — pretty-print: indented HTML, or indented JSON with `-j`/`--table`
 - `-b, --base URL` — base for resolving relative URLs
 - `--color WHEN` — colorize HTML output: `auto` (default: only on a TTY,
   respects [`NO_COLOR`](https://no-color.org)), `always`, `never`
@@ -204,6 +205,7 @@ with side-by-side command tables.
 | HTML → Markdown | — | — | ✓ |
 | remove nodes (`-r`) | — | ✓ | ✓ |
 | colored HTML output | ✓ | — | ✓ (TTY auto-detect, `NO_COLOR`) |
+| pretty-printed HTML | always | — | opt-in (`-p`) |
 | fetch URLs directly | — | — | ✓ |
 | resolve relative URLs | — | ✓ (`-b`) | ✓ (auto for URLs) |
 | non-UTF-8 pages (Shift_JIS, KOI8-R, …) | ✓ | mojibake | ✓ (BOM + header + `<meta>` sniff) |
