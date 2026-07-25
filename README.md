@@ -48,6 +48,12 @@ let the install script pick the right one:
 curl -fsSL https://raw.githubusercontent.com/rashida-thorne/cull/main/scripts/install.sh | sh
 ```
 
+Homebrew (macOS or Linux):
+
+```sh
+brew install rashida-thorne/cull/cull
+```
+
 Shell completions: `cull --completions bash|zsh|fish|elvish|powershell`
 (e.g. `cull --completions zsh > ~/.zfunc/_cull`).
 Man page: `cull --man > cull.1` (or `cull --man | man -l -` to read it now).
