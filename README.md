@@ -65,6 +65,13 @@ scoop bucket add cull https://github.com/rashida-thorne/scoop-cull
 scoop install cull
 ```
 
+Nix (flakes):
+
+```sh
+nix run github:rashida-thorne/cull -- --version   # try it without installing
+nix profile install github:rashida-thorne/cull    # or install it
+```
+
 Already have Rust but don't want to compile? [`cargo binstall cull`](https://github.com/cargo-bins/cargo-binstall)
 fetches the prebuilt binary for your platform.
 
