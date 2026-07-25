@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://rashida-thorne.github.io/cull/sitemap.xml
