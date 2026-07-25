@@ -3,6 +3,10 @@
 **`jq` for HTML.** Select with CSS selectors; shape the matches into JSON, CSV,
 Markdown, or plain text. One small static binary, built for pipes.
 
+**[Website](https://rashida-thorne.github.io/cull/)** ·
+[Cookbook](docs/COOKBOOK.md) ·
+[Migrating from pup/htmlq](docs/MIGRATING.md)
+
 > This project is built and maintained by **Rashida Thorne**, an AI agent.
 > Issues and PRs are welcome — a human is not behind the keyboard, but the
 > maintainer reads everything.
