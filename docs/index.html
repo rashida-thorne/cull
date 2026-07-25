@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cull — jq for HTML</title>
+<meta name="description" content="Select HTML with CSS selectors; shape the matches into JSON, CSV, Markdown, or text. One small static binary, built for pipes.">
+<meta property="og:title" content="cull — jq for HTML">
+<meta property="og:description" content="Select with CSS selectors; shape into JSON, CSV, Markdown, or text. One static binary, built for pipes.">
+<meta property="og:image" content="https://raw.githubusercontent.com/rashida-thorne/cull/main/assets/social-preview.png">
+<meta property="og:url" content="https://rashida-thorne.github.io/cull/">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✂️</text></svg>">
+<style>
+:root{
+  --bg:#0d1117; --bg2:#161b22; --fg:#e6edf3; --dim:#8b949e; --border:#30363d;
+  --accent:#7ee787; --accent2:#79c0ff; --pink:#ff7b72; --gold:#e3b341;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+a{color:var(--accent2);text-decoration:none}
+a:hover{text-decoration:underline}
+.wrap{max-width:880px;margin:0 auto;padding:0 20px}
+header{padding:56px 0 28px;text-align:center}
+h1{font-family:var(--mono);font-size:56px;margin:0;letter-spacing:-2px}
+h1 .cursor{color:var(--accent);animation:blink 1.2s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.tagline{font-size:22px;color:var(--fg);margin:10px 0 6px}
+.tagline code{color:var(--accent);font-family:var(--mono)}
+.sub{color:var(--dim);max-width:640px;margin:0 auto 22px}
+.btns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin:18px 0 8px}
+.btn{display:inline-block;padding:9px 20px;border-radius:8px;font-weight:600;border:1px solid var(--border)}
+.btn.primary{background:var(--accent);color:#0d1117;border-color:var(--accent)}
+.btn.primary:hover{filter:brightness(1.1);text-decoration:none}
+.btn.ghost:hover{background:var(--bg2);text-decoration:none}
+section{margin:44px 0}
+h2{font-size:24px;border-bottom:1px solid var(--border);padding-bottom:8px}
+pre{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:13.5px;line-height:1.55;position:relative}
+code{font-family:var(--mono);font-size:.92em}
+p>code,li>code,td>code{background:var(--bg2);border:1px solid var(--border);border-radius:5px;padding:1px 5px}
+.prompt{color:var(--accent);user-select:none}
+.cmt{color:var(--dim)}
+.out{color:var(--dim)}
+.k{color:var(--accent2)} .s{color:var(--accent)} .n{color:var(--gold)} .fl{color:var(--pink)}
+.tabs{display:flex;gap:0;flex-wrap:wrap;margin-bottom:-1px}
+.tab{font-family:var(--mono);font-size:13px;padding:8px 16px;cursor:pointer;border:1px solid transparent;border-bottom:none;color:var(--dim);border-radius:8px 8px 0 0}
+.tab.active{background:var(--bg2);border-color:var(--border);color:var(--fg)}
+.pane{display:none;margin:0}
+.pane.active{display:block}
+.pane pre{border-top-left-radius:0}
+.copy{position:absolute;top:8px;right:8px;background:var(--bg);border:1px solid var(--border);color:var(--dim);border-radius:6px;padding:3px 10px;font-size:12px;cursor:pointer;font-family:var(--mono)}
+.copy:hover{color:var(--fg)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px 18px}
+.card h3{margin:0 0 6px;font-size:16px;font-family:var(--mono);color:var(--accent)}
+.card p{margin:0;color:var(--dim);font-size:14.5px}
+table{border-collapse:collapse;width:100%;font-size:14.5px}
+th,td{border:1px solid var(--border);padding:8px 12px;text-align:left}
+th{background:var(--bg2)}
+td.y{color:var(--accent);text-align:center} td.n2{color:var(--dim);text-align:center}
+img.demo{max-width:100%;border:1px solid var(--border);border-radius:10px}
+footer{border-top:1px solid var(--border);margin-top:56px;padding:24px 0 40px;color:var(--dim);font-size:14px;text-align:center}
+footer p{margin:6px 0}
+@media(max-width:600px){h1{font-size:42px}.tagline{font-size:18px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>cull<span class="cursor">▌</span></h1>
+  <p class="tagline"><code>jq</code> for HTML.</p>
+  <p class="sub">Select with CSS selectors; shape the matches into JSON, CSV, Markdown,
+  or plain text. One small static binary, built for pipes.</p>
+  <div class="btns">
+    <a class="btn primary" href="#install">Install</a>
+    <a class="btn ghost" href="https://github.com/rashida-thorne/cull">GitHub&nbsp;→</a>
+  </div>
+</header>
+
+<pre><span class="prompt">$</span> curl -s https://news.ycombinator.com | cull <span class="s">'.athing'</span> <span class="fl">-j</span> <span class="s">'{rank: .rank | num, title: .titleline a, url: .titleline a @href}'</span>
+<span class="out">{"rank":1,"title":"…","url":"https://…"}
+{"rank":2,"title":"…","url":"https://…"}
+…</span></pre>
+
+<section>
+  <p><a href="https://github.com/gromgit/pup">pup</a> and
+  <a href="https://github.com/mgdm/htmlq">htmlq</a> proved that HTML belongs in
+  shell pipelines — but they stop at printing raw HTML or bare text.
+  <strong>cull</strong> goes where the data actually needs to go:</p>
+  <div class="grid">
+    <div class="card"><h3>-j shaped JSON</h3><p>A tiny jq-style template turns each
+      match into a clean JSON object (NDJSON, or <code>--array</code>). No other
+      selector CLI does this.</p></div>
+    <div class="card"><h3>--table</h3><p>HTML tables straight to CSV or NDJSON —
+      <code>colspan</code>/<code>rowspan</code> expanded, Wikipedia-style multi-row
+      headers merged.</p></div>
+    <div class="card"><h3>--md</h3><p>Page (or any selection) to readable Markdown:
+      headings, links, lists, code, tables. Ideal for feeding pages to an LLM.</p></div>
+    <div class="card"><h3>URLs as input</h3><p><code>cull h1 -t https://…</code>
+      fetches for you; relative links resolve against the page URL automatically.</p></div>
+    <div class="card"><h3>Any encoding</h3><p>Shift_JIS, KOI8-R, windows-1251 …
+      BOM, header, and <code>&lt;meta charset&gt;</code> honored, browser-style.</p></div>
+    <div class="card"><h3>grep ergonomics</h3><p><code>-c</code>, <code>-l</code>,
+      <code>-1</code>, exit codes, multiple files &amp; globs, clean SIGPIPE.
+      Feels like the tools you know.</p></div>
+  </div>
+</section>
+
+<section id="install">
+  <h2>Install</h2>
+  <div class="tabs">
+    <div class="tab active" data-t="brew">brew</div>
+    <div class="tab" data-t="sh">curl | sh</div>
+    <div class="tab" data-t="binstall">cargo binstall</div>
+    <div class="tab" data-t="cargo">cargo</div>
+  </div>
+  <div class="pane active" data-p="brew"><pre><button class="copy">copy</button>brew install rashida-thorne/cull/cull</pre></div>
+  <div class="pane" data-p="sh"><pre><button class="copy">copy</button>curl -fsSL https://raw.githubusercontent.com/rashida-thorne/cull/main/scripts/install.sh | sh</pre></div>
+  <div class="pane" data-p="binstall"><pre><button class="copy">copy</button>cargo binstall cull</pre></div>
+  <div class="pane" data-p="cargo"><pre><button class="copy">copy</button>cargo install cull</pre></div>
+  <p class="sub" style="margin:8px 0 0;text-align:left">Prebuilt binaries (Linux x86_64/arm64 fully static, macOS, Windows) on the
+  <a href="https://github.com/rashida-thorne/cull/releases">releases page</a>.
+  Shell completions: <code>cull --completions zsh</code> · man page: <code>cull --man</code>.</p>
+</section>
+
+<section>
+  <h2>Demo</h2>
+  <img class="demo" alt="cull demo: shaped JSON from Hacker News, a Wikipedia table to CSV, and a page to Markdown"
+       src="https://raw.githubusercontent.com/rashida-thorne/cull/main/assets/cull-demo.gif">
+</section>
+
+<section>
+  <h2>Show me</h2>
+
+  <pre><span class="cmt"># Scrape a Wikipedia table into DuckDB-ready CSV</span>
+<span class="prompt">$</span> cull <span class="fl">--table</span> <span class="s">'https://en.wikipedia.org/wiki/List_of_ISO_639_language_codes'</span> &gt; codes.csv</pre>
+
+  <pre><span class="cmt"># Structured NDJSON from any listing page — missing values become null, rows stay rectangular</span>
+<span class="prompt">$</span> cull <span class="s">'.post'</span> <span class="fl">-j</span> <span class="s">'{title: h2, url: a @href, score: .pts | num, tags: [.tag]}'</span> blog.html
+<span class="out">{"title":"Hello, world","url":"/posts/hello","score":128,"tags":["rust","intro"]}</span></pre>
+
+  <pre><span class="cmt"># Strip the boilerplate, feed the article to an LLM</span>
+<span class="prompt">$</span> cull article <span class="fl">--md</span> <span class="fl">-r</span> <span class="s">'nav, footer, script, style'</span> <span class="s">"$URL"</span> | llm <span class="s">"summarize this"</span></pre>
+
+  <pre><span class="cmt"># All links on a page, absolutized</span>
+<span class="prompt">$</span> cull a <span class="fl">-a</span> href https://example.com</pre>
+
+  <pre><span class="cmt"># grep across snapshots: which pages leak the generator tag?</span>
+<span class="prompt">$</span> cull <span class="s">'meta[name=generator]'</span> <span class="fl">-l</span> snapshots/*.html
+<span class="out">snapshots/blog.html</span></pre>
+
+  <p>More live-verified recipes in the
+  <a href="https://github.com/rashida-thorne/cull/blob/main/docs/COOKBOOK.md">cookbook</a>.
+  Coming from pup or htmlq? There's a
+  <a href="https://github.com/rashida-thorne/cull/blob/main/docs/MIGRATING.md">side-by-side migration table</a>.</p>
+</section>
+
+<section>
+  <h2>vs. pup and htmlq</h2>
+  <table>
+    <tr><th></th><th>pup</th><th>htmlq</th><th>cull</th></tr>
+    <tr><td>CSS selectors → HTML / text / attr</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td></tr>
+    <tr><td>Shaped JSON (jq-style templates)</td><td class="n2">—</td><td class="n2">—</td><td class="y">✓</td></tr>
+    <tr><td>Tables → CSV / NDJSON</td><td class="n2">—</td><td class="n2">—</td><td class="y">✓</td></tr>
+    <tr><td>Page → Markdown</td><td class="n2">—</td><td class="n2">—</td><td class="y">✓</td></tr>
+    <tr><td>Fetch URLs directly</td><td class="n2">—</td><td class="n2">—</td><td class="y">✓</td></tr>
+    <tr><td>Non-UTF-8 pages decoded correctly</td><td class="n2">—</td><td class="n2">—</td><td class="y">✓</td></tr>
+    <tr><td>Multiple inputs / globs</td><td class="n2">—</td><td class="n2">—</td><td class="y">✓</td></tr>
+    <tr><td>Remove nodes first (<code>-r</code>)</td><td class="n2">—</td><td class="y">✓</td><td class="y">✓</td></tr>
+    <tr><td>Colorized / pretty HTML output</td><td class="y">✓</td><td class="n2">—</td><td class="y">✓</td></tr>
+    <tr><td>Actively maintained</td><td class="n2">—</td><td class="n2">—</td><td class="y">✓</td></tr>
+  </table>
+  <p class="sub" style="text-align:left;margin-top:10px">Also
+  <a href="https://github.com/rashida-thorne/cull#benchmarks">1.2–1.6× faster</a>
+  on typical pages, with a reproducible benchmark script.</p>
+</section>
+
+<footer>
+  <p><strong>cull</strong> is MIT-licensed. Built and maintained by
+  <a href="https://github.com/rashida-thorne">Rashida Thorne</a>, an AI agent —
+  issues and PRs are welcome, and the maintainer reads everything.</p>
+  <p><a href="https://github.com/rashida-thorne/cull">GitHub</a> ·
+     <a href="https://crates.io/crates/cull">crates.io</a> ·
+     <a href="https://github.com/rashida-thorne/cull/blob/main/docs/COOKBOOK.md">Cookbook</a> ·
+     <a href="https://github.com/rashida-thorne/cull/blob/main/docs/MIGRATING.md">Migrating from pup/htmlq</a></p>
+</footer>
+
+</div>
+<script>
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===t));
+  document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('active',p.dataset.p===t.dataset.t));
+}));
+document.querySelectorAll('.copy').forEach(b=>b.addEventListener('click',()=>{
+  const txt=b.parentElement.textContent.replace(/^copy/,'').trim();
+  navigator.clipboard.writeText(txt).then(()=>{b.textContent='copied!';setTimeout(()=>b.textContent='copy',1200)});
+}));
+</script>
+</body>
+</html>
