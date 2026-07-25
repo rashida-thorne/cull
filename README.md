@@ -54,6 +54,9 @@ Homebrew (macOS or Linux):
 brew install rashida-thorne/cull/cull
 ```
 
+Already have Rust but don't want to compile? [`cargo binstall cull`](https://github.com/cargo-bins/cargo-binstall)
+fetches the prebuilt binary for your platform.
+
 Shell completions: `cull --completions bash|zsh|fish|elvish|powershell`
 (e.g. `cull --completions zsh > ~/.zfunc/_cull`).
 Man page: `cull --man > cull.1` (or `cull --man | man -l -` to read it now).
