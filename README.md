@@ -160,6 +160,8 @@ in templates, and links/images in `--md`.
 - `--array` — wrap `-j` output in a single JSON array
 - `-p, --pretty` — pretty-print JSON
 - `-b, --base URL` — base for resolving relative URLs
+- `--color WHEN` — colorize HTML output: `auto` (default: only on a TTY,
+  respects [`NO_COLOR`](https://no-color.org)), `always`, `never`
 
 ### Exit codes
 
@@ -188,6 +190,9 @@ cull '.headline a' -a href https://example-news.site | sort -u
 More live-verified recipes (HN, lobste.rs, Wikipedia, LLM pipelines, cron
 diffing) in the **[cookbook](docs/COOKBOOK.md)**.
 
+Coming from pup or htmlq? There's a **[migration guide](docs/MIGRATING.md)**
+with side-by-side command tables.
+
 ## vs. pup / htmlq
 
 | | pup | htmlq | **cull** |
@@ -198,6 +203,7 @@ diffing) in the **[cookbook](docs/COOKBOOK.md)**.
 | table → CSV/NDJSON | — | — | ✓ |
 | HTML → Markdown | — | — | ✓ |
 | remove nodes (`-r`) | — | ✓ | ✓ |
+| colored HTML output | ✓ | — | ✓ (TTY auto-detect, `NO_COLOR`) |
 | fetch URLs directly | — | — | ✓ |
 | resolve relative URLs | — | ✓ (`-b`) | ✓ (auto for URLs) |
 | non-UTF-8 pages (Shift_JIS, KOI8-R, …) | ✓ | mojibake | ✓ (BOM + header + `<meta>` sniff) |

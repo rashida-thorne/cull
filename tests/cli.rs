@@ -127,6 +127,33 @@ fn default_output_is_html() {
 }
 
 #[test]
+fn piped_output_has_no_ansi_by_default() {
+    // stdout is a pipe in tests, so `auto` must not colorize.
+    let (out, _, _) = cull(&[".post h2", "-1", &fixture("blog.html")], None);
+    assert!(!out.contains('\x1b'));
+}
+
+#[test]
+fn color_always_emits_ansi() {
+    let (out, _, code) = cull(
+        &[".post h2", "-1", "--color", "always", &fixture("blog.html")],
+        None,
+    );
+    assert_eq!(code, 0);
+    assert!(out.contains("\x1b[1;34mh2"), "tag name colored: {out:?}");
+    assert!(out.contains("\x1b[0m"));
+}
+
+#[test]
+fn color_never_suppresses_ansi() {
+    let (out, _, _) = cull(
+        &[".post h2", "-1", "--color", "never", &fixture("blog.html")],
+        None,
+    );
+    assert!(!out.contains('\x1b'));
+}
+
+#[test]
 fn no_match_exits_1() {
     let (out, _, code) = cull(&[".does-not-exist", "-t", &fixture("blog.html")], None);
     assert_eq!(out, "");

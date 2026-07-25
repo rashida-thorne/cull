@@ -1,3 +1,4 @@
+mod color;
 mod decode;
 mod extract;
 mod markdown;
@@ -72,6 +73,10 @@ struct Args {
     #[arg(short = 'b', long, value_name = "URL")]
     base: Option<String>,
 
+    /// Colorize HTML output: auto (default; TTY only), always, never
+    #[arg(long, value_name = "WHEN", value_enum, default_value_t = ColorWhen::Auto)]
+    color: ColorWhen,
+
     /// Generate shell completions (bash, zsh, fish, elvish, powershell) and exit
     #[arg(long, value_name = "SHELL", value_enum, exclusive = true)]
     completions: Option<clap_complete::Shell>,
@@ -79,6 +84,28 @@ struct Args {
     /// Print a roff man page to stdout and exit (e.g. `cull --man > cull.1`)
     #[arg(long, exclusive = true)]
     man: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
+enum ColorWhen {
+    Auto,
+    Always,
+    Never,
+}
+
+impl ColorWhen {
+    fn enabled(self) -> bool {
+        use std::io::IsTerminal;
+        match self {
+            ColorWhen::Always => true,
+            ColorWhen::Never => false,
+            ColorWhen::Auto => {
+                // Honor the NO_COLOR convention (any non-empty value disables).
+                let no_color = std::env::var_os("NO_COLOR").is_some_and(|v| !v.is_empty());
+                !no_color && std::io::stdout().is_terminal()
+            }
+        }
+    }
 }
 
 fn main() -> ExitCode {
@@ -253,10 +280,15 @@ fn run(args: &Args) -> Result<bool, String> {
         }
         any
     } else {
+        let colorize = args.color.enabled();
         let mut any = false;
         for m in &matches {
             any = true;
-            writeln!(out, "{}", m.html()).map_err(io_err)?;
+            if colorize {
+                writeln!(out, "{}", color::element_to_colored_html(*m)).map_err(io_err)?;
+            } else {
+                writeln!(out, "{}", m.html()).map_err(io_err)?;
+            }
         }
         any
     };

@@ -15,7 +15,7 @@ newer feature sneaks in, CI will catch it — feel free to flag it.
 ## Before you open a PR
 
 ```sh
-cargo test                     # 52 tests (unit + integration)
+cargo test                     # unit + integration tests
 cargo clippy --all-targets -- -D warnings
 cargo fmt --check
 ```
