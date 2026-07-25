@@ -64,6 +64,17 @@ $ cull article --md https://example.com/post | llm "summarize this"
 Headings, lists, code blocks, tables, blockquotes, links and images all survive
 the trip. Links come out absolute because the base URL is known.
 
+No convenient `<article>` to select? Strip the boilerplate instead with
+`--remove` (`-r`), which deletes matching nodes before conversion:
+
+```console
+$ cull --md -r 'header, nav, footer, script, style' https://lobste.rs/about | head -3
+
+# About
+
+Lobsters is a computing-focused community centered around link aggregation...
+```
+
 ## 4. Pull attributes
 
 Every image URL on a page (already absolute, thanks to auto-base):

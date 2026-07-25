@@ -63,6 +63,11 @@ struct Args {
     #[arg(short = 'p', long)]
     pretty: bool,
 
+    /// Remove nodes matching this CSS selector before selecting/output
+    /// (repeatable; comma lists work: --remove 'nav, footer, script')
+    #[arg(short = 'r', long = "remove", value_name = "SELECTOR")]
+    remove: Vec<String>,
+
     /// Resolve relative URLs in href/src against this base
     #[arg(short = 'b', long, value_name = "URL")]
     base: Option<String>,
@@ -152,7 +157,20 @@ fn run(args: &Args) -> Result<bool, String> {
     let (selector_src, input) = disambiguate(args);
 
     let html_src = read_input(&input)?;
-    let doc = Html::parse_document(&html_src);
+    let mut doc = Html::parse_document(&html_src);
+
+    // --remove: detach matching nodes before any selection or conversion.
+    for sel_src in &args.remove {
+        let sel = Selector::parse(sel_src)
+            .map_err(|e| format!("invalid --remove selector {sel_src:?}: {e}"))?;
+        let ids: Vec<_> = doc.select(&sel).map(|el| el.id()).collect();
+        for id in ids {
+            if let Some(mut node) = doc.tree.get_mut(id) {
+                node.detach();
+            }
+        }
+    }
+    let doc = doc;
 
     // Auto-base: if input was a URL and --base not given, use it.
     let base = args.base.clone().or_else(|| {

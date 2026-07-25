@@ -175,3 +175,43 @@ fn decodes_windows_1251_file_via_meta_charset() {
     assert_eq!(code, 0);
     assert_eq!(out.trim(), "привет мир");
 }
+
+#[test]
+fn remove_strips_nodes_before_md() {
+    let html = "<body><nav>MENU</nav><article><h1>T</h1><script>x()</script><p>Body</p></article><footer>F</footer></body>";
+    let (out, _, code) = cull(
+        &["--md", "--remove", "nav, footer, script", "-"],
+        Some(html),
+    );
+    assert_eq!(out, "# T\n\nBody\n");
+    assert_eq!(code, 0);
+}
+
+#[test]
+fn remove_applies_before_selection() {
+    let html = "<div class=a><span class=x>1</span><span>2</span></div>";
+    let (out, _, code) = cull(&[".a", "-t", "-r", ".x"], Some(html));
+    assert_eq!(out, "2\n");
+    assert_eq!(code, 0);
+}
+
+#[test]
+fn remove_is_repeatable() {
+    let html = "<p class=a>1</p><p class=b>2</p><p>3</p>";
+    let (out, _, _) = cull(&["p", "-t", "-r", ".a", "-r", ".b"], Some(html));
+    assert_eq!(out, "3\n");
+}
+
+#[test]
+fn remove_can_empty_the_match_set() {
+    let (out, _, code) = cull(&[".a", "-t", "-r", ".a"], Some("<div class=a>x</div>"));
+    assert_eq!(out, "");
+    assert_eq!(code, 1); // grep-like: no matches
+}
+
+#[test]
+fn remove_invalid_selector_errors() {
+    let (_, err, code) = cull(&["p", "-t", "-r", "[[["], Some("<p>x</p>"));
+    assert!(err.contains("--remove"));
+    assert_eq!(code, 2);
+}

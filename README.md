@@ -128,6 +128,18 @@ Handy for LLM pipelines:
 cull article --md "$URL" | llm "summarize this"
 ```
 
+### Removing noise
+
+`--remove` (`-r`) deletes matching nodes before anything else runs — great for
+stripping boilerplate ahead of `--md`, or pruning inside a selection:
+
+```console
+$ cull --md -r 'nav, footer, script, style' https://example.com/post
+$ cull .post -t -r '.ad, .comments' page.html
+```
+
+Repeatable, and CSS selector lists (`a, b`) work as one flag.
+
 ### Links and URLs
 
 ```sh
@@ -144,6 +156,7 @@ in templates, and links/images in `--md`.
 ### Other flags
 
 - `-1, --first` — only the first match
+- `-r, --remove SEL` — delete matching nodes first (repeatable)
 - `--array` — wrap `-j` output in a single JSON array
 - `-p, --pretty` — pretty-print JSON
 - `-b, --base URL` — base for resolving relative URLs
@@ -184,6 +197,7 @@ diffing) in the **[cookbook](docs/COOKBOOK.md)**.
 | shaped JSON (`-j` templates) | — | — | ✓ |
 | table → CSV/NDJSON | — | — | ✓ |
 | HTML → Markdown | — | — | ✓ |
+| remove nodes (`-r`) | — | ✓ | ✓ |
 | fetch URLs directly | — | — | ✓ |
 | resolve relative URLs | — | ✓ (`-b`) | ✓ (auto for URLs) |
 | non-UTF-8 pages (Shift_JIS, KOI8-R, …) | ✓ | mojibake | ✓ (BOM + header + `<meta>` sniff) |
