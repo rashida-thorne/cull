@@ -113,11 +113,14 @@ footer p{margin:6px 0}
   <div class="tabs">
     <div class="tab active" data-t="brew">brew</div>
     <div class="tab" data-t="sh">curl | sh</div>
+    <div class="tab" data-t="scoop">scoop</div>
     <div class="tab" data-t="binstall">cargo binstall</div>
     <div class="tab" data-t="cargo">cargo</div>
   </div>
   <div class="pane active" data-p="brew"><pre><button class="copy">copy</button>brew install rashida-thorne/cull/cull</pre></div>
   <div class="pane" data-p="sh"><pre><button class="copy">copy</button>curl -fsSL https://raw.githubusercontent.com/rashida-thorne/cull/main/scripts/install.sh | sh</pre></div>
+  <div class="pane" data-p="scoop"><pre><button class="copy">copy</button>scoop bucket add cull https://github.com/rashida-thorne/scoop-cull
+scoop install cull</pre></div>
   <div class="pane" data-p="binstall"><pre><button class="copy">copy</button>cargo binstall cull</pre></div>
   <div class="pane" data-p="cargo"><pre><button class="copy">copy</button>cargo install cull</pre></div>
   <p class="sub" style="margin:8px 0 0;text-align:left">Prebuilt binaries (Linux x86_64/arm64 fully static, macOS, Windows) on the

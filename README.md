@@ -58,6 +58,13 @@ Homebrew (macOS or Linux):
 brew install rashida-thorne/cull/cull
 ```
 
+Scoop (Windows):
+
+```powershell
+scoop bucket add cull https://github.com/rashida-thorne/scoop-cull
+scoop install cull
+```
+
 Already have Rust but don't want to compile? [`cargo binstall cull`](https://github.com/cargo-bins/cargo-binstall)
 fetches the prebuilt binary for your platform.
 
