@@ -52,6 +52,13 @@ const RAW_TEXT: &[&str] = &["script", "style", "xmp", "iframe", "noembed", "nofr
 /// Elements whose contents are whitespace-sensitive: never reformat inside.
 const PRESERVE: &[&str] = &["pre", "textarea"];
 
+/// True if this element is in the HTML namespace. Void/raw-text/preserve
+/// rules are HTML-only: an XML `<link>` or `<title>` (e.g. in an RSS feed,
+/// parsed with `--xml`) is an ordinary element with children.
+pub(crate) fn is_html(e: &scraper::node::Element) -> bool {
+    &*e.name.ns == "http://www.w3.org/1999/xhtml"
+}
+
 /// Serialize the outer HTML of `el` with ANSI colors, unformatted.
 pub fn element_to_colored_html(el: ElementRef) -> String {
     let mut out = String::new();
@@ -63,7 +70,7 @@ pub fn element_to_colored_html(el: ElementRef) -> String {
 /// unformatted. Children of raw-text elements are emitted unescaped.
 pub fn element_to_inner_html(el: ElementRef, color: bool) -> String {
     let mut out = String::new();
-    let raw = RAW_TEXT.contains(&el.value().name());
+    let raw = is_html(el.value()) && RAW_TEXT.contains(&el.value().name());
     for child in el.children() {
         write_node(child, &mut out, raw, palette(color));
     }
@@ -75,7 +82,7 @@ pub fn element_to_inner_html(el: ElementRef, color: bool) -> String {
 pub fn element_to_pretty_inner_html(el: ElementRef, color: bool) -> String {
     let name = el.value().name();
     // Whitespace-sensitive contents are never reformatted.
-    if PRESERVE.contains(&name) || RAW_TEXT.contains(&name) {
+    if is_html(el.value()) && (PRESERVE.contains(&name) || RAW_TEXT.contains(&name)) {
         return element_to_inner_html(el, color);
     }
     let mut out = String::new();
@@ -136,10 +143,10 @@ fn write_node(node: NodeRef<Node>, out: &mut String, raw_text: bool, p: &Palette
         Node::Element(e) => {
             let name = e.name();
             open_tag(e, out, p);
-            if VOID.contains(&name) {
+            if is_html(e) && VOID.contains(&name) {
                 return;
             }
-            let raw = RAW_TEXT.contains(&name);
+            let raw = is_html(e) && RAW_TEXT.contains(&name);
             for child in node.children() {
                 write_node(child, out, raw, p);
             }
@@ -193,13 +200,13 @@ fn write_pretty(node: NodeRef<Node>, out: &mut String, depth: usize, p: &Palette
             // Whitespace-sensitive or raw-text subtrees: one indented line,
             // contents verbatim (adding newlines inside <script> could even
             // change JS semantics via ASI).
-            if PRESERVE.contains(&name) || RAW_TEXT.contains(&name) {
+            if is_html(e) && (PRESERVE.contains(&name) || RAW_TEXT.contains(&name)) {
                 indent(out, depth);
                 write_node(node, out, false, p);
                 out.push('\n');
                 return;
             }
-            if VOID.contains(&name) {
+            if is_html(e) && VOID.contains(&name) {
                 indent(out, depth);
                 open_tag(e, out, p);
                 out.push('\n');

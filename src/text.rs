@@ -91,6 +91,17 @@ fn collect(node: NodeRef<Node>, segs: &mut Vec<Seg>) {
         }
         Node::Element(e) => {
             let name = e.name();
+            // XML elements (non-HTML namespace, e.g. from --xml) have no
+            // inline/block distinction; treat each as a block so sibling
+            // fields land on separate lines instead of gluing together.
+            if !crate::serialize::is_html(e) {
+                segs.push(Seg::Break);
+                for child in node.children() {
+                    collect(child, segs);
+                }
+                segs.push(Seg::Break);
+                return;
+            }
             if INVISIBLE.contains(&name) {
                 return;
             }

@@ -90,5 +90,14 @@ cull 'span, .b'              # selector lists work everywhere too
 Non-standard extensions from pup (`slice{}`, `json{}`, text/attr pseudo
 "display filters") are replaced by the cull flags shown above.
 
+One more thing neither tool can do at all: **XML**. Both parse everything as
+HTML, which silently mangles RSS/Atom feeds and sitemaps (`<link>` is a void
+element in HTML, so `pup 'item link'` and `htmlq 'item link'` lose every
+URL). cull auto-detects XML and parses it for real:
+
+```sh
+cull item -j '{title: title, url: link, date: pubDate}' https://lobste.rs/rss
+```
+
 Something missing from these tables? [Open an issue](https://github.com/rashida-thorne/cull/issues)
 — migration gaps are treated as bugs.

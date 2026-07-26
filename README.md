@@ -38,8 +38,13 @@ actually needs to go:
   relative links resolve against the page URL automatically. Need a
   browser-ish `User-Agent` or a cookie? `-H 'Name: Value'`, curl-style.
 - **Any encoding** — non-UTF-8 pages (Shift_JIS, KOI8-R, windows-1251, …)
-  decode correctly: BOM, `Content-Type` header, and `<meta charset>` are all
-  honored, browser-style.
+  decode correctly: BOM, `Content-Type` header, `<?xml encoding>`, and
+  `<meta charset>` are all honored, browser-style.
+- **Real XML mode** — RSS/Atom feeds, sitemaps, SVG, OPML. HTML parsers
+  silently *mangle* XML (`<link>` is "void" in HTML, so every RSS item's URL
+  is lost — try it in pup or htmlq), and lowercase `pubDate`. `cull`
+  auto-detects XML and parses it for real; selectors become case-sensitive
+  and namespaced tags work (`media\:thumbnail @url`).
 
 ## Install
 
@@ -255,6 +260,28 @@ An unreadable input is reported on stderr and the rest still run (exit `2`
 at the end, like grep). With `-j --array`, matches from all inputs merge
 into one array.
 
+### XML: feeds, sitemaps, SVG
+
+HTML parsers *mangle* XML: in HTML `<link>` is a void element, so every RSS
+item's `<link>URL</link>` loses its URL (this silently breaks in pup and
+htmlq); `pubDate` gets lowercased; namespaces are mishandled. `cull` detects
+XML (an `<?xml…?>` declaration or a known root like `<rss>`, `<feed>`,
+`<urlset>`, `<opml>`, `<svg>`) and parses it as real XML — `--xml` forces it,
+`--html` forces it off. Selectors become case-sensitive, XML-style; select
+namespaced tags with an escaped colon:
+
+```sh
+# Feed reader in one line (RSS or Atom):
+$ cull item -j '{title: title, url: link, date: pubDate}' https://lobste.rs/rss
+{"title":"…","url":"https://…","date":"Sat, 25 Jul 2026 06:33:00 -0500"}
+
+# Every URL in a sitemap:
+$ cull 'url > loc' -t https://blog.rust-lang.org/sitemap.xml
+
+# Namespaced tags — escape the colon:
+$ cull item -j '{title: title, thumb: media\:thumbnail @url}' https://feeds.bbci.co.uk/news/rss.xml
+```
+
 ### Exit codes
 
 `0` matches found · `1` no matches (grep-style) · `2` error
@@ -302,6 +329,7 @@ with side-by-side command tables.
 | browser-style text layout (`<br>`, blocks, `<pre>`) | — | [asked](https://github.com/mgdm/htmlq/issues/74) | ✓ |
 | colored HTML output | ✓ | — | ✓ (TTY auto-detect, `NO_COLOR`) |
 | pretty-printed HTML | always | — | opt-in (`-p`) |
+| XML: RSS/Atom, sitemaps, SVG (`--xml`, auto-detected) | mangled | mangled | ✓ (case-sensitive, namespaces) |
 | fetch URLs directly | — | — | ✓ |
 | multiple inputs / globs (`-c`, `-l` per file) | — | — | ✓ |
 | resolve relative URLs | — | ✓ (`-b`) | ✓ (auto for URLs) |

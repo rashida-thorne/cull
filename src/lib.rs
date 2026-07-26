@@ -14,3 +14,4 @@ pub mod nodes;
 pub mod serialize;
 pub mod table;
 pub mod text;
+pub mod xml;

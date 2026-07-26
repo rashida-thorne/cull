@@ -29,7 +29,15 @@ pub fn decode_html(bytes: &[u8], header_charset: Option<&str>) -> String {
         return text.into_owned();
     }
 
-    // 3. <meta> prescan of the first 1024 bytes.
+    // 3. XML declaration: <?xml version="1.0" encoding="…"?>.
+    if let Some(enc) = sniff_xml_decl_encoding(&bytes[..bytes.len().min(1024)])
+        .and_then(|label| Encoding::for_label(label.as_bytes()))
+    {
+        let (text, _) = enc.decode_without_bom_handling(bytes);
+        return text.into_owned();
+    }
+
+    // 4. <meta> prescan of the first 1024 bytes.
     if let Some(enc) = sniff_meta_charset(&bytes[..bytes.len().min(1024)])
         .and_then(|label| Encoding::for_label(label.as_bytes()))
     {
@@ -37,8 +45,37 @@ pub fn decode_html(bytes: &[u8], header_charset: Option<&str>) -> String {
         return text.into_owned();
     }
 
-    // 4. Default: UTF-8, lossy.
+    // 5. Default: UTF-8, lossy.
     String::from_utf8_lossy(bytes).into_owned()
+}
+
+/// Extract the `encoding` label from a leading XML declaration, e.g.
+/// `<?xml version="1.0" encoding="ISO-8859-1"?>` → `Some("ISO-8859-1")`.
+fn sniff_xml_decl_encoding(bytes: &[u8]) -> Option<String> {
+    // Only look at an actual leading declaration (whitespace allowed).
+    let mut i = 0;
+    while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+        i += 1;
+    }
+    let rest = &bytes[i..];
+    if !rest.starts_with(b"<?xml") {
+        return None;
+    }
+    let end = find_sub(rest, b"?>")?;
+    let decl = std::str::from_utf8(&rest[..end]).ok()?;
+    let idx = decl.find("encoding")?;
+    let after = decl[idx + "encoding".len()..].trim_start();
+    let after = after.strip_prefix('=')?.trim_start();
+    let (quote, val) = after.split_at(1);
+    if quote != "\"" && quote != "'" {
+        return None;
+    }
+    let label = val.split(quote.chars().next().unwrap()).next()?.trim();
+    if label.is_empty() {
+        None
+    } else {
+        Some(label.to_string())
+    }
 }
 
 /// Extract the charset label from a `Content-Type` header value, e.g.
@@ -234,6 +271,21 @@ mod tests {
             out.contains('\u{FFFD}'),
             "meta beyond 1024 bytes must be ignored"
         );
+    }
+
+    #[test]
+    fn xml_decl_encoding_wins_without_meta() {
+        // "café" in ISO-8859-1: é = 0xE9 (invalid as UTF-8).
+        let mut b = b"<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?><r>caf".to_vec();
+        b.push(0xE9);
+        b.extend_from_slice(b"</r>");
+        assert!(decode_html(&b, None).contains("café"));
+        // Single quotes and extra whitespace work too.
+        let b2 = b"  <?xml version='1.0' encoding = 'windows-1251' ?><r/>".to_vec();
+        assert!(decode_html(&b2, None).contains("<r/>"));
+        // No declaration -> lossy UTF-8 fallback unaffected.
+        assert_eq!(sniff_xml_decl_encoding(b"<r>hi</r>"), None);
+        assert_eq!(sniff_xml_decl_encoding(b"<?xml version=\"1.0\"?>"), None);
     }
 
     #[test]

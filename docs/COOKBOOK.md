@@ -234,6 +234,49 @@ Pin a version with a tag: `ghcr.io/rashida-thorne/cull:0.6.0`.
 
 ---
 
+## 11. XML: RSS/Atom feeds, sitemaps
+
+XML inputs are auto-detected (an `<?xml…?>` declaration or a known root:
+`<rss>`, `<feed>`, `<urlset>`, `<sitemapindex>`, `<opml>`, `<svg>`) and
+parsed as *real* XML — no HTML mangling (in HTML, `<link>` is void, so RSS
+URLs vanish in pup/htmlq). Force with `--xml`, opt out with `--html`.
+Selectors are case-sensitive in XML mode.
+
+A one-line feed reader (RSS 2.0):
+
+```console
+$ cull item -j '{title: title, url: link, date: pubDate}' https://lobste.rs/rss
+{"title":"A shell colon does nothing. Use it anyway","url":"https://refp.se/articles/…","date":"Sat, 25 Jul 2026 06:33:00 -0500"}
+```
+
+Atom feeds put the URL in an attribute:
+
+```console
+$ cull entry -j '{title: title, url: link @href, date: updated}' https://blog.rust-lang.org/feed.xml
+{"title":"Announcing Rust 1.97.1","url":"https://blog.rust-lang.org/2026/07/16/Rust-1.97.1/","date":"2026-07-16T00:00:00+00:00"}
+```
+
+Every URL in a sitemap (works for `<sitemapindex>` too — select `sitemap > loc`):
+
+```console
+$ cull 'url > loc' -t https://blog.rust-lang.org/sitemap.xml
+https://blog.rust-lang.org/
+https://blog.rust-lang.org/2014/09/15/Rust-1.0/
+…
+```
+
+Namespaced tags: escape the colon in the selector.
+
+```console
+$ cull item -j '{title: title, thumb: media\:thumbnail @url}' https://feeds.bbci.co.uk/news/rss.xml
+```
+
+New-posts watcher, no feed reader involved (compare with §6):
+
+```sh
+cull 'item > link' -t https://example.com/feed.xml | diff - seen.txt | grep '^<'
+```
+
 ## Template syntax refresher
 
 ```

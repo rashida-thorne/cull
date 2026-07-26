@@ -1,5 +1,5 @@
 use clap::Parser;
-use cull::{decode, extract, markdown, nodes, serialize, table, text};
+use cull::{decode, extract, markdown, nodes, serialize, table, text, xml};
 use scraper::{ElementRef, Html, Selector};
 use std::io::{Read, Write};
 use std::process::ExitCode;
@@ -97,6 +97,16 @@ struct Args {
     /// Timeout for URL fetches, in seconds (0 = no timeout)
     #[arg(long, value_name = "SECS", default_value_t = 30)]
     timeout: u64,
+
+    /// Parse input as XML (RSS/Atom feeds, sitemaps, SVG, OPML — selectors
+    /// become case-sensitive). Auto-detected for inputs that start with an
+    /// <?xml…?> declaration or a known XML root; this flag forces it
+    #[arg(long, conflicts_with = "html")]
+    xml: bool,
+
+    /// Force HTML parsing even for inputs that look like XML
+    #[arg(long)]
+    html: bool,
 
     /// Colorize HTML output: auto (default; TTY only), always, never
     #[arg(long, value_name = "WHEN", value_enum, default_value_t = ColorWhen::Auto)]
@@ -282,7 +292,28 @@ fn run(args: &Args) -> Result<(bool, bool), String> {
                 continue;
             }
         };
-        let mut doc = Html::parse_document(&html_src);
+        let mut doc = if args.xml {
+            match xml::parse_xml(&html_src) {
+                Ok(doc) => doc,
+                Err(e) => {
+                    eprintln!("cull: {input}: {e}");
+                    had_error = true;
+                    continue;
+                }
+            }
+        } else if !args.html && xml::looks_like_xml(&html_src) {
+            match xml::parse_xml(&html_src) {
+                Ok(doc) => doc,
+                Err(e) => {
+                    // Auto-detection guessed wrong or the feed is broken:
+                    // fall back to the forgiving HTML parser, but say so.
+                    eprintln!("cull: {input}: looks like XML but: {e}; parsing as HTML");
+                    Html::parse_document(&html_src)
+                }
+            }
+        } else {
+            Html::parse_document(&html_src)
+        };
 
         // --remove: detach matching nodes before any selection or conversion.
         for sel in &remove_sels {

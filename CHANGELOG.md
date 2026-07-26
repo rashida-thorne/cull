@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-07-26
+
+### Added
+- **XML mode** — RSS/Atom feeds, sitemaps, SVG, OPML, and arbitrary XML now
+  parse correctly. HTML parsers silently mangle XML (`<link>` is a void
+  element in HTML, so every RSS item's URL is lost; `pubDate` is lowercased);
+  cull now detects XML (an `<?xml…?>` declaration or a known root:
+  `<rss>`, `<feed>`, `<urlset>`, `<sitemapindex>`, `<opml>`, `<svg>`) and
+  parses it with a real XML parser. `--xml` forces XML parsing, `--html`
+  forces HTML. In XML mode selectors are case-sensitive (`pubDate` matches
+  `<pubDate>` only) and namespaced tags are selectable with an escaped
+  colon (`media\:thumbnail @url`). All output modes work: `-t` puts each
+  XML field on its own line, `-j` templates, `-p`, `--json-nodes`, `-i`, …
+  A feed reader is now one line:
+  `cull item -j '{title: title, url: link, date: pubDate}' https://lobste.rs/rss`
+- Charset sniffing now also honors the `encoding` label in a leading
+  `<?xml version="1.0" encoding="…"?>` declaration (after BOM and
+  `Content-Type`, before `<meta charset>`).
+
+### Fixed
+- Detection is per-input, so `cull 'h2, item > title' page.html feed.xml`
+  parses each file the right way. If auto-detected XML turns out to be
+  malformed, cull warns on stderr and falls back to the forgiving HTML
+  parser; explicit `--xml` makes malformed XML a hard error (exit 2).
+
 ## [0.9.0] — 2026-07-26
 
 ### Added
@@ -129,7 +154,8 @@ Initial release.
   (`cull … | head` exits silently, like grep).
 - Prebuilt static binaries for 5 targets; `curl | sh` installer; Homebrew tap.
 
-[Unreleased]: https://github.com/rashida-thorne/cull/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/rashida-thorne/cull/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/rashida-thorne/cull/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/rashida-thorne/cull/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/rashida-thorne/cull/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/rashida-thorne/cull/compare/v0.6.0...v0.7.0

@@ -699,3 +699,118 @@ fn selector_list_comma() {
     assert_eq!(out, "s\ny\n");
     assert_eq!(code, 0);
 }
+
+// ---- XML mode ----
+
+#[test]
+fn xml_autodetect_rss_links() {
+    // The headline fix: html5ever parses <link> as void and loses the URL;
+    // XML mode (auto-detected from the <?xml decl) keeps it.
+    let (out, err, code) = cull(&["item > link", "-t", &fixture("feed.xml")], None);
+    assert_eq!(
+        out,
+        "https://example.com/posts/1\nhttps://example.com/posts/2\n"
+    );
+    assert_eq!(err, "");
+    assert_eq!(code, 0);
+}
+
+#[test]
+fn xml_case_sensitive_selectors() {
+    let (out, _, code) = cull(&["pubDate", "-c", &fixture("feed.xml")], None);
+    assert_eq!(out, "2\n");
+    assert_eq!(code, 0);
+    // XML selectors are case-sensitive: lowercase matches nothing (exit 1).
+    let (out, _, code) = cull(&["pubdate", "-c", &fixture("feed.xml")], None);
+    assert_eq!(out, "0\n");
+    assert_eq!(code, 1);
+}
+
+#[test]
+fn xml_flag_forces_parsing_from_stdin() {
+    // No <?xml decl and an unknown root: auto-detection stays off, --xml forces.
+    let src = "<things><name>a</name><name>b</name></things>";
+    let (out, _, code) = cull(&["name", "-t", "--xml"], Some(src));
+    assert_eq!(out, "a\nb\n");
+    assert_eq!(code, 0);
+}
+
+#[test]
+fn html_flag_forces_html_parsing() {
+    let src = "<?xml version=\"1.0\"?><rss><item><link>https://x.com/1</link></item></rss>";
+    let (out, _, code) = cull(&["item > link", "-t", "--html"], Some(src));
+    // HTML parsing mangles <link> into a void element: no text.
+    assert_eq!(out, "");
+    assert_eq!(code, 1);
+}
+
+#[test]
+fn xml_template_over_feed() {
+    let (out, _, code) = cull(
+        &[
+            "item",
+            "-j",
+            "{title: title, url: link, date: pubDate}",
+            &fixture("feed.xml"),
+        ],
+        None,
+    );
+    let first: serde_json::Value = serde_json::from_str(out.lines().next().unwrap()).unwrap();
+    assert_eq!(first["title"], "First & Foremost");
+    assert_eq!(first["url"], "https://example.com/posts/1");
+    assert_eq!(first["date"], "Mon, 01 Jan 2026 00:00:00 GMT");
+    assert_eq!(code, 0);
+}
+
+#[test]
+fn xml_explicit_flag_malformed_is_error() {
+    let (out, err, code) = cull(&["a", "--xml"], Some("<a><b></a>"));
+    assert_eq!(out, "");
+    assert!(err.contains("XML parse error"), "stderr was: {err}");
+    assert_eq!(code, 2);
+}
+
+#[test]
+fn xml_autodetect_falls_back_to_html_on_broken_xml() {
+    let src = "<?xml version=\"1.0\"?><rss><item>unclosed";
+    let (out, err, code) = cull(&["item", "-t"], Some(src));
+    assert!(err.contains("parsing as HTML"), "stderr was: {err}");
+    assert_eq!(out, "unclosed\n");
+    assert_eq!(code, 0);
+}
+
+#[test]
+fn xml_pretty_serializes_link_with_children() {
+    let (out, _, code) = cull(&["item", "-p", "-1", &fixture("feed.xml")], None);
+    assert!(
+        out.contains("<link>https://example.com/posts/1</link>"),
+        "output was: {out}"
+    );
+    assert_eq!(code, 0);
+}
+
+#[test]
+fn xml_and_html_inputs_mix() {
+    // Per-input sniffing: one HTML file, one XML feed in the same run.
+    let (out, _, code) = cull(
+        &[
+            "h2, item > title",
+            "-t",
+            &fixture("blog.html"),
+            &fixture("feed.xml"),
+        ],
+        None,
+    );
+    assert_eq!(out, "Hello, world\nOn tables\nFirst & Foremost\nSecond\n");
+    assert_eq!(code, 0);
+}
+
+#[test]
+fn xml_sitemap_locs() {
+    let sitemap = "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\
+        <url><loc>https://example.com/a</loc></url>\
+        <url><loc>https://example.com/b</loc></url></urlset>";
+    let (out, _, code) = cull(&["url > loc", "-t"], Some(sitemap));
+    assert_eq!(out, "https://example.com/a\nhttps://example.com/b\n");
+    assert_eq!(code, 0);
+}

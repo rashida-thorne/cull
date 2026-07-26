@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/">
+  <channel>
+    <title>Example Feed</title>
+    <link>https://example.com/</link>
+    <item>
+      <title>First &amp; Foremost</title>
+      <link>https://example.com/posts/1</link>
+      <pubDate>Mon, 01 Jan 2026 00:00:00 GMT</pubDate>
+      <description><![CDATA[Some <b>bold</b> claims]]></description>
+      <media:thumbnail url="https://example.com/1.jpg"/>
+    </item>
+    <item>
+      <title>Second</title>
+      <link>https://example.com/posts/2</link>
+      <pubDate>Tue, 02 Jan 2026 00:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>
