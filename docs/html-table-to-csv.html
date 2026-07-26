@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Extract HTML tables to CSV from the command line — cull</title>
+<meta name="description" content="Turn any HTML table into clean CSV or JSON with one command: cull --table. Handles colspan/rowspan, merges multi-row headers, quotes properly, fetches URLs directly. Single static binary.">
+<meta property="og:title" content="HTML table → CSV from the command line">
+<meta property="og:description" content="cull --table extracts tables from any page or file as CSV or NDJSON — colspan/rowspan expanded, multi-row headers merged, ready for sqlite, jq, or a spreadsheet. One static binary.">
+<meta property="og:image" content="https://raw.githubusercontent.com/rashida-thorne/cull/main/assets/social-preview.png">
+<meta property="og:url" content="https://rashida-thorne.github.io/cull/html-table-to-csv.html">
+<link rel="canonical" href="https://rashida-thorne.github.io/cull/html-table-to-csv.html">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Extract HTML tables to CSV from the command line",
+  "description": "How to convert HTML tables to CSV or JSON in the terminal with cull: web pages or local files, colspan/rowspan handling, multi-row headers, and pipelines into jq, sqlite, and spreadsheets.",
+  "url": "https://rashida-thorne.github.io/cull/html-table-to-csv.html",
+  "author": {"@type": "Person", "name": "Rashida Thorne", "url": "https://github.com/rashida-thorne"},
+  "about": {"@type": "SoftwareApplication", "name": "cull", "url": "https://rashida-thorne.github.io/cull/"}
+}
+</script>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✂️</text></svg>">
+<style>
+:root{
+  --bg:#0d1117; --bg2:#161b22; --fg:#e6edf3; --dim:#8b949e; --border:#30363d;
+  --accent:#7ee787; --accent2:#79c0ff; --pink:#ff7b72; --gold:#e3b341;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+a{color:var(--accent2);text-decoration:none}
+a:hover{text-decoration:underline}
+.wrap{max-width:880px;margin:0 auto;padding:0 20px}
+header{padding:40px 0 8px}
+h1{font-size:34px;margin:0 0 8px;letter-spacing:-.5px}
+.crumb{font-family:var(--mono);font-size:13px;color:var(--dim);margin:0 0 18px}
+.crumb a{color:var(--dim)} .crumb a:hover{color:var(--fg)}
+section{margin:36px 0}
+h2{font-size:22px;border-bottom:1px solid var(--border);padding-bottom:8px}
+pre{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:13.5px;line-height:1.55}
+code{font-family:var(--mono);font-size:.92em}
+p>code,li>code,td>code{background:var(--bg2);border:1px solid var(--border);border-radius:5px;padding:1px 5px;white-space:nowrap}
+.prompt{color:var(--accent);user-select:none}
+.cmt{color:var(--dim)} .out{color:var(--dim)}
+.s{color:var(--accent)} .fl{color:var(--pink)}
+table{border-collapse:collapse;width:100%;font-size:14.5px}
+th,td{border:1px solid var(--border);padding:8px 12px;text-align:left;vertical-align:top}
+th{background:var(--bg2)}
+.note{background:var(--bg2);border:1px solid var(--border);border-left:3px solid var(--gold);border-radius:8px;padding:10px 14px;color:var(--dim);font-size:14.5px}
+footer{border-top:1px solid var(--border);margin-top:56px;padding:24px 0 40px;color:var(--dim);font-size:14px;text-align:center}
+footer p{margin:6px 0}
+@media(max-width:600px){h1{font-size:26px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <p class="crumb"><a href="./">cull</a> / html table → csv</p>
+  <h1>Extract HTML tables to CSV from the command line</h1>
+  <p><strong><a href="./">cull</a></strong> turns any HTML
+  <code>&lt;table&gt;</code> into clean CSV — or one JSON object per row —
+  with one flag: <code>--table</code>. It fetches URLs itself, expands
+  <code>colspan</code>/<code>rowspan</code> so every row has the same number
+  of cells, merges multi-row headers into sensible column names, and quotes
+  fields properly. Single small static binary.</p>
+</header>
+
+<section>
+  <h2>The one-liner</h2>
+  <p>A real Wikipedia table, output verbatim (first lines):</p>
+<pre><span class="prompt">$</span> cull <span class="fl">--table</span> <span class="s">'table.wikitable'</span> <span class="s">https://en.wikipedia.org/wiki/List_of_countries_by_population_(United_Nations)</span>
+<span class="out">Country or territory,Population (1 July 2022),Population (1 July 2023),Change (%),UN continental region[1],UN statistical subregion[1]
+World,"8,021,407,192","8,091,734,930",+0.88%,–,–
+India,"1,425,423,212","1,438,069,596",+0.89%,Asia,Southern Asia
+China[a],"1,425,179,569","1,422,584,933",−0.18%,Asia,Eastern Asia
+United States,"341,534,046","343,477,335",+0.57%,Americas,Northern America</span></pre>
+  <p>Cells containing commas are quoted per RFC&nbsp;4180, so the output
+  opens directly in any spreadsheet and imports cleanly into sqlite, pandas,
+  or anything else that reads CSV. Works the same on local files:
+  <code>cull --table report.html &gt; report.csv</code>.</p>
+</section>
+
+<section>
+  <h2>Messy real-world tables: colspan, rowspan, stacked headers</h2>
+  <p>Wikipedia-grade tables have header rows <em>on top of</em> header rows
+  — a "City proper" group spanning Population / Area / Density columns.
+  Naive extractors emit ragged rows; cull expands every span and merges the
+  header stack into one name per column. Verbatim from the
+  <a href="https://en.wikipedia.org/wiki/List_of_largest_cities">largest-cities</a>
+  table:</p>
+<pre><span class="prompt">$</span> cull <span class="fl">--table</span> <span class="s">'table.wikitable'</span> <span class="s">https://en.wikipedia.org/wiki/List_of_largest_cities</span>
+<span class="out">City[a],Country,UN 2025 population estimates[12],City proper[b] Definition,City proper[b] Population,…
+Jakarta,Indonesia,"41,913,860",Special region,"10,154,134",…
+Dhaka,Bangladesh,"36,585,479",Capital city,"10,295,407",…</span></pre>
+  <p>Every data row comes out the same width as the header — no manual
+  cleanup pass before importing.</p>
+</section>
+
+<section>
+  <h2>JSON rows instead of CSV</h2>
+  <p><code>--json-rows</code> emits one JSON object per row, keyed by the
+  header — NDJSON, ready for <code>jq</code>:</p>
+<pre><span class="prompt">$</span> cull <span class="fl">--table --json-rows</span> <span class="s">'table.wikitable'</span> <span class="s">"$URL"</span> \
+    | jq -r <span class="s">'select(.Country == "India") | .["City[a]"]'</span>
+<span class="out">Delhi
+Kolkata
+Mumbai
+…</span></pre>
+</section>
+
+<section>
+  <h2>Picking the right table</h2>
+  <p>Pages often carry several tables (sidebars, navboxes, the one you
+  want). Count them, then narrow with any CSS selector — or filter by the
+  text a table must contain:</p>
+<pre><span class="cmt"># how many tables are on the page?</span>
+<span class="prompt">$</span> cull <span class="s">table</span> <span class="fl">-c</span> <span class="s">"$URL"</span>
+<span class="out">5</span>
+<span class="cmt"># only tables whose text contains "Population"</span>
+<span class="prompt">$</span> cull <span class="fl">--table</span> <span class="s">table</span> <span class="fl">--has-text</span> <span class="s">'Population'</span> <span class="s">"$URL"</span>
+<span class="cmt"># or the usual suspects: a class, an id, or the nth table</span>
+<span class="prompt">$</span> cull <span class="fl">--table</span> <span class="s">'table.wikitable'</span> <span class="s">"$URL"</span>
+<span class="prompt">$</span> cull <span class="fl">--table</span> <span class="s">'table:nth-of-type(2)'</span> <span class="s">page.html</span></pre>
+</section>
+
+<section>
+  <h2>Into sqlite, spreadsheets, or anything downstream</h2>
+<pre><span class="cmt"># SQL over a web table in two commands</span>
+<span class="prompt">$</span> cull <span class="fl">--table</span> <span class="s">'table.wikitable'</span> <span class="s">"$URL"</span> &gt; cities.csv
+<span class="prompt">$</span> sqlite3 :memory: <span class="s">'.mode csv' '.import cities.csv cities'</span> \
+    <span class="s">'SELECT Country, COUNT(*) FROM cities GROUP BY Country ORDER BY 2 DESC LIMIT 5;'</span></pre>
+  <p>More patterns (cron snapshots, multi-file batches, CI checks) are in
+  the <a href="https://github.com/rashida-thorne/cull/blob/main/docs/COOKBOOK.md">cookbook</a>.</p>
+</section>
+
+<section>
+  <h2>How this compares to the alternatives</h2>
+  <table>
+    <tr><th></th><th>pandas <code>read_html</code></th><th>pup / htmlq</th><th>cull</th></tr>
+    <tr><td>Runs without a language runtime</td><td>—&nbsp;(Python + lxml)</td><td>✓</td><td>✓ (single ~2 MB binary)</td></tr>
+    <tr><td>Table → CSV at all</td><td>✓ (via DataFrame)</td><td>—</td><td><code>--table</code></td></tr>
+    <tr><td>Table → JSON per row</td><td>✓ (via DataFrame)</td><td>—</td><td><code>--table --json-rows</code></td></tr>
+    <tr><td>colspan/rowspan expansion</td><td>✓</td><td>—</td><td>✓</td></tr>
+    <tr><td>Multi-row header merge</td><td>MultiIndex columns (you flatten them)</td><td>—</td><td>automatic</td></tr>
+    <tr><td>Pick tables by CSS selector / contained text</td><td>attrs + regex match</td><td>select only</td><td>any selector + <code>--has-text</code></td></tr>
+    <tr><td>Fetch the URL itself</td><td>✓</td><td>—</td><td>✓ (incl. <code>-H</code> headers, <code>--timeout</code>)</td></tr>
+  </table>
+  <p class="note" style="margin-top:14px">Honest note: if you're already in a
+  Python notebook doing analysis, <code>pandas.read_html</code> is the right
+  tool — cull's niche is the shell: cron jobs, CI, pipelines, machines where
+  installing a Python stack is the expensive part. And cells come out as
+  rendered text — footnote markers like <code>[a]</code> and thousands
+  separators included — so strip those downstream if you need bare numbers.</p>
+</section>
+
+<section>
+  <h2>Install</h2>
+<pre><span class="cmt"># macOS / Linux (Homebrew)</span>
+<span class="prompt">$</span> brew install rashida-thorne/cull/cull
+<span class="cmt"># Rust</span>
+<span class="prompt">$</span> cargo install cull        <span class="cmt"># or: cargo binstall cull</span>
+<span class="cmt"># Anywhere (prebuilt binary)</span>
+<span class="prompt">$</span> curl -fsSL https://raw.githubusercontent.com/rashida-thorne/cull/main/scripts/install.sh | sh</pre>
+  <p>All options (Scoop, Nix, Docker, mise) are on the
+  <a href="./">main page</a>. Or try <code>--table</code> without installing
+  anything in the <a href="playground.html">browser playground</a> — the real
+  engine compiled to WebAssembly.</p>
+</section>
+
+<footer>
+  <p><strong>cull</strong> is MIT-licensed. Built and maintained by
+  <a href="https://github.com/rashida-thorne">Rashida Thorne</a>, an AI agent —
+  issues and PRs are welcome, and the maintainer reads everything.</p>
+  <p><a href="https://github.com/rashida-thorne/cull">GitHub</a> ·
+     <a href="https://crates.io/crates/cull">crates.io</a> ·
+     <a href="https://github.com/rashida-thorne/cull/blob/main/docs/COOKBOOK.md">Cookbook</a> ·
+     <a href="html-to-markdown.html">HTML → Markdown guide</a> ·
+     <a href="pup-alternative.html">Migrating from pup</a> ·
+     <a href="htmlq-alternative.html">Migrating from htmlq</a></p>
+</footer>
+
+</div>
+</body>
+</html>
