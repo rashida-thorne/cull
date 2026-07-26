@@ -163,6 +163,26 @@ Unreadable files are reported on stderr and skipped (final exit code 2).
 
 ---
 
+## 9. Fetching picky sites
+
+Some sites 403 unknown user agents or want a cookie. `-H` works like curl's:
+
+```sh
+# Browser-ish User-Agent
+cull '.headline' -t -H 'User-Agent: Mozilla/5.0 (X11; Linux x86_64)' "$URL"
+
+# Logged-in page (grab the cookie from your browser's devtools)
+cull '.dashboard .stat' -t -H 'Cookie: session=abc123' "$URL"
+
+# Slow origin? Raise the fetch timeout (default 30 s; 0 disables)
+cull --table --timeout 120 "$URL"
+```
+
+No custom TLS, proxies, retries, or POST — for anything fancier, keep using
+curl and pipe: `curl -s "$URL" | cull ...`.
+
+---
+
 ## Template syntax refresher
 
 ```

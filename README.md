@@ -33,7 +33,8 @@ actually needs to go:
 - **`--md`** — page (or any selection) to readable Markdown: headings, links,
   lists, code blocks, tables. Ideal for feeding web content to an LLM.
 - **URLs as input** — `cull h1 -t https://example.com` fetches for you, and
-  relative links resolve against the page URL automatically.
+  relative links resolve against the page URL automatically. Need a
+  browser-ish `User-Agent` or a cookie? `-H 'Name: Value'`, curl-style.
 - **Any encoding** — non-UTF-8 pages (Shift_JIS, KOI8-R, windows-1251, …)
   decode correctly: BOM, `Content-Type` header, and `<meta charset>` are all
   honored, browser-style.
@@ -183,6 +184,9 @@ in templates, and links/images in `--md`.
 - `--array` — wrap `-j` output in a single JSON array
 - `-p, --pretty` — pretty-print: indented HTML, or indented JSON with `-j`/`--table`
 - `-b, --base URL` — base for resolving relative URLs
+- `-H, --header 'Name: Value'` — add a header to URL fetches, curl-style
+  (repeatable): `-H 'User-Agent: Mozilla/5.0' -H 'Cookie: session=…'`
+- `--timeout SECS` — timeout for URL fetches (default 30; `0` disables)
 - `--color WHEN` — colorize HTML output: `auto` (default: only on a TTY,
   respects [`NO_COLOR`](https://no-color.org)), `always`, `never`
 

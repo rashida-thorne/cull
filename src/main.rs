@@ -81,6 +81,14 @@ struct Args {
     #[arg(short = 'b', long, value_name = "URL")]
     base: Option<String>,
 
+    /// Add a header to URL fetches, curl-style (repeatable), e.g. -H 'User-Agent: Mozilla/5.0' -H 'Cookie: k=v'
+    #[arg(short = 'H', long = "header", value_name = "NAME: VALUE")]
+    headers: Vec<String>,
+
+    /// Timeout for URL fetches, in seconds (0 = no timeout)
+    #[arg(long, value_name = "SECS", default_value_t = 30)]
+    timeout: u64,
+
     /// Colorize HTML output: auto (default; TTY only), always, never
     #[arg(long, value_name = "WHEN", value_enum, default_value_t = ColorWhen::Auto)]
     color: ColorWhen,
@@ -148,7 +156,7 @@ fn main() -> ExitCode {
     }
 }
 
-fn read_input(input: &str) -> Result<String, String> {
+fn read_input(input: &str, args: &Args) -> Result<String, String> {
     match input {
         "-" => {
             let mut buf = Vec::new();
@@ -157,7 +165,7 @@ fn read_input(input: &str) -> Result<String, String> {
                 .map_err(|e| format!("reading stdin: {e}"))?;
             Ok(decode::decode_html(&buf, None))
         }
-        path if path.starts_with("http://") || path.starts_with("https://") => fetch(path),
+        path if path.starts_with("http://") || path.starts_with("https://") => fetch(path, args),
         path => {
             let buf = std::fs::read(path).map_err(|e| format!("{path}: {e}"))?;
             Ok(decode::decode_html(&buf, None))
@@ -165,11 +173,38 @@ fn read_input(input: &str) -> Result<String, String> {
     }
 }
 
-fn fetch(url: &str) -> Result<String, String> {
-    let mut resp = ureq::get(url)
-        .header("User-Agent", concat!("cull/", env!("CARGO_PKG_VERSION")))
-        .call()
-        .map_err(|e| format!("fetching {url}: {e}"))?;
+/// Parse a curl-style `-H 'Name: Value'` argument into a (name, value) pair.
+fn parse_header(raw: &str) -> Result<(&str, &str), String> {
+    let (name, value) = raw
+        .split_once(':')
+        .ok_or_else(|| format!("invalid --header {raw:?}: expected 'Name: Value'"))?;
+    let (name, value) = (name.trim(), value.trim());
+    if name.is_empty() {
+        return Err(format!("invalid --header {raw:?}: empty header name"));
+    }
+    Ok((name, value))
+}
+
+fn fetch(url: &str, args: &Args) -> Result<String, String> {
+    let timeout = match args.timeout {
+        0 => None,
+        secs => Some(std::time::Duration::from_secs(secs)),
+    };
+    let agent: ureq::Agent = ureq::Agent::config_builder()
+        .timeout_global(timeout)
+        .build()
+        .into();
+    let mut req = agent.get(url);
+    let mut have_ua = false;
+    for raw in &args.headers {
+        let (name, value) = parse_header(raw)?;
+        have_ua |= name.eq_ignore_ascii_case("user-agent");
+        req = req.header(name, value);
+    }
+    if !have_ua {
+        req = req.header("User-Agent", concat!("cull/", env!("CARGO_PKG_VERSION")));
+    }
+    let mut resp = req.call().map_err(|e| format!("fetching {url}: {e}"))?;
     let header_charset = resp
         .headers()
         .get("content-type")
@@ -220,7 +255,7 @@ fn run(args: &Args) -> Result<(bool, bool), String> {
     let mut array_acc: Vec<serde_json::Value> = Vec::new();
 
     for input in &inputs {
-        let html_src = match read_input(input) {
+        let html_src = match read_input(input, args) {
             Ok(s) => s,
             Err(e) => {
                 // Like grep: report, keep going, exit 2 at the end.
@@ -386,4 +421,37 @@ fn fmt_json(v: &serde_json::Value, pretty: bool) -> String {
 
 fn io_err(e: std::io::Error) -> String {
     format!("write: {e}")
+}
+
+#[cfg(test)]
+mod header_tests {
+    use super::parse_header;
+
+    #[test]
+    fn simple() {
+        assert_eq!(parse_header("X-Test: yes"), Ok(("X-Test", "yes")));
+    }
+
+    #[test]
+    fn no_space_and_extra_colons() {
+        assert_eq!(
+            parse_header("Cookie:k=v; t=8:30"),
+            Ok(("Cookie", "k=v; t=8:30"))
+        );
+    }
+
+    #[test]
+    fn empty_value_ok() {
+        assert_eq!(parse_header("X-Empty:"), Ok(("X-Empty", "")));
+    }
+
+    #[test]
+    fn missing_colon_rejected() {
+        assert!(parse_header("NoColonHere").is_err());
+    }
+
+    #[test]
+    fn empty_name_rejected() {
+        assert!(parse_header(": value").is_err());
+    }
 }

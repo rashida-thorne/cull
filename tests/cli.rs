@@ -433,3 +433,72 @@ fn stdin_dash_mixes_with_files() {
     assert_eq!(out, "S\nB\nC\n");
     assert_eq!(code, 0);
 }
+
+/// Spawn a one-shot local HTTP server that returns `body` as text/html and
+/// hands back (url, join-handle yielding the raw request head it received).
+fn one_shot_server(body: &'static str) -> (String, std::thread::JoinHandle<String>) {
+    use std::io::{Read, Write as _};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+    let url = format!("http://{}/", listener.local_addr().unwrap());
+    let handle = std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().expect("accept");
+        let mut buf = [0u8; 4096];
+        let mut req = String::new();
+        loop {
+            let n = stream.read(&mut buf).expect("read");
+            req.push_str(&String::from_utf8_lossy(&buf[..n]));
+            if n == 0 || req.contains("\r\n\r\n") {
+                break;
+            }
+        }
+        let resp = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        stream.write_all(resp.as_bytes()).expect("write");
+        req
+    });
+    (url, handle)
+}
+
+#[test]
+fn fetch_sends_custom_headers_and_ua_override() {
+    let (url, server) = one_shot_server("<p>fetched</p>");
+    let (out, _, code) = cull(
+        &[
+            "p",
+            "-t",
+            "-H",
+            "User-Agent: test-agent/9.9",
+            "-H",
+            "X-Cull-Test: yes",
+            &url,
+        ],
+        None,
+    );
+    assert_eq!(out, "fetched\n");
+    assert_eq!(code, 0);
+    let req = server.join().unwrap().to_ascii_lowercase();
+    assert!(req.contains("user-agent: test-agent/9.9"), "req was: {req}");
+    assert!(req.contains("x-cull-test: yes"), "req was: {req}");
+    // Default UA must not also be sent when overridden.
+    assert!(!req.contains("cull/"), "req was: {req}");
+}
+
+#[test]
+fn fetch_sends_default_ua_when_not_overridden() {
+    let (url, server) = one_shot_server("<p>hi</p>");
+    let (out, _, code) = cull(&["p", "-t", &url], None);
+    assert_eq!(out, "hi\n");
+    assert_eq!(code, 0);
+    let req = server.join().unwrap().to_ascii_lowercase();
+    assert!(req.contains("user-agent: cull/"), "req was: {req}");
+}
+
+#[test]
+fn invalid_header_is_fatal() {
+    let (_, err, code) = cull(&["p", "-t", "-H", "NoColon", "http://127.0.0.1:1/"], None);
+    assert_eq!(code, 2);
+    assert!(err.contains("invalid --header"), "stderr was: {err}");
+}
