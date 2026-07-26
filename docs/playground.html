@@ -163,6 +163,7 @@ const SAMPLE_HTML = `<html>
 
 const PRESETS = [
   {name:"shaped JSON", sel:".post", mode:"json", arg:"{title: h2, url: a @href, tags: [.tag]}", base:"https://news.example.com/"},
+  {name:"nested JSON", sel:"main", mode:"json", arg:"{page: h1, posts: [.post {title: h2, comments: .link | num, tags: [.tag]}]}", base:"https://news.example.com/"},
   {name:"links", sel:"a", mode:"attr", arg:"href", base:"https://news.example.com/"},
   {name:"table → CSV", sel:"", mode:"table"},
   {name:"page → Markdown", sel:"", mode:"md", remove:"nav, footer"},

@@ -32,6 +32,16 @@ $ cull '.story' -j '{title: .u-url, url: .u-url @href, tags: [.tag]}' https://lo
 {"title":"...","url":"https://...","tags":["security","vibecoding"]}
 ```
 
+Nested objects: `sel {…}` re-scopes the object to `sel`'s first match, and
+`[sel {…}]` emits one object per match — so a story's byline can stay a
+structured sub-object instead of flat keys:
+
+```console
+$ cull '.story' -j "{title: .link a, score: .upvoter | num,
+                     by: .byline {user: \"a[href^='/~']:not(:has(img))\", when: time @datetime}}" https://lobste.rs
+{"title":"…","score":91,"by":{"user":"refp","when":"2026-07-25 06:33:00"}}
+```
+
 Want one big array instead of NDJSON? Add `--array`; add `-p` to pretty-print.
 
 ## 2. Tables → CSV or JSON
@@ -215,11 +225,15 @@ Pin a version with a tag: `ghcr.io/rashida-thorne/cull:0.6.0`.
 ## Template syntax refresher
 
 ```
-{key: selector, key2: selector @attr, key3: [selector], key4: selector | num}
+{key: selector, key2: selector @attr, key3: [selector], key4: selector | num,
+ key5: selector {nested…}, key6: [selector {nested…}]}
 ```
 
 - `selector` → collapsed text of the first match (relative to the outer match)
 - `@attr` → attribute value instead of text
 - `[...]` → array of all matches
-- `| num` → extract the first number (int or float) from the text
-- quote a selector if it contains `,` or `}`: `{age: "a:last-child"}`
+- `| num` → extract the first number (int or float) from the text;
+  `| trim`, `| lower`, `| upper` also available, and filters chain
+- `sel {…}` → object evaluated inside `sel`'s first match (null if no match);
+  `[sel {…}]` → one object per match
+- quote a selector if it contains `,` `{` or `}`: `{age: "a:last-child"}`

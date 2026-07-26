@@ -84,6 +84,35 @@ fn json_template_ndjson() {
 }
 
 #[test]
+fn json_nested_objects_and_filters() {
+    let html = r#"<div class="post"><h2> Post A </h2>
+        <span class="c"><b class="u">Joe</b><i class="t">hi</i></span>
+        <span class="c"><b class="u">Amy</b><i class="t">yo</i></span>
+        <a class="more" href="  /next  ">1,234 comments</a></div>"#;
+    let (out, _, _) = cull(
+        &[
+            ".post",
+            "-j",
+            "{title: h2 | upper, n: .more | num, href: .more @href | trim, \
+             comments: [.c {user: .u | lower, text: .t}], first: .c {user: .u}}",
+        ],
+        Some(html),
+    );
+    let v: serde_json::Value = serde_json::from_str(out.trim()).unwrap();
+    assert_eq!(v["title"], "POST A");
+    assert_eq!(v["n"], 1234);
+    assert_eq!(v["href"], "/next");
+    assert_eq!(
+        v["comments"],
+        serde_json::json!([
+            {"user": "joe", "text": "hi"},
+            {"user": "amy", "text": "yo"}
+        ])
+    );
+    assert_eq!(v["first"]["user"], "Joe");
+}
+
+#[test]
 fn json_array_flag() {
     let (out, _, _) = cull(
         &[".post", "-j", "{t: h2}", "--array", &fixture("blog.html")],

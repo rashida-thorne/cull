@@ -121,15 +121,27 @@ The `-j` template is evaluated once per matched element:
 - `selector` — any CSS selector, evaluated *within* the match; first hit wins.
 - `@field` — `@text` (default), `@html`, `@innerhtml`, or any attribute
   (`@href`, `@src`, `@data-id`, …).
-- `| num` — pull the first number out of the value as a real JSON number:
-  `"1,234 points"` → `1234`, `"$3.50"` → `3.5`, no digits → `null`.
+- `| filter` — post-process the value, chainable: `| num` pulls the first
+  number out as a real JSON number (`"1,234 points"` → `1234`, `"$3.50"` →
+  `3.5`, no digits → `null`); `| trim`, `| lower`, `| upper` do what they say.
 - `[selector]` — collect **all** matches into an array.
+- `selector {…}` — evaluate the object *inside* the (first) match; wrap it as
+  `[selector {…}]` to get **one object per match** — real nested extraction.
 - `.` — the matched element itself (e.g. `. @data-id`).
-- Quote selectors containing `, } ] @ |`: `"a.x, a.y"`.
+- Quote selectors containing `, { } ] @ |`: `"a.x, a.y"`.
 
 ```console
 $ cull '.post' -j '{title: h2, url: a @href, score: .pts | num, tags: [.tag]}' blog.html
 {"title":"Hello, world","url":"/posts/hello","score":128,"tags":["rust","intro"]}
+```
+
+Nested objects, live on [lobste.rs](https://lobste.rs) — note the typed
+`score` and the per-story `by` object:
+
+```console
+$ cull '.story' -j "{title: .link a, score: .upvoter | num, tags: [.tag],
+                     by: .byline {user: \"a[href^='/~']:not(:has(img))\", when: time @datetime}}" https://lobste.rs
+{"title":"…","score":91,"tags":["programming"],"by":{"user":"refp","when":"2026-07-25 06:33:00"}}
 ```
 
 Missing single values become `null`; missing lists become `[]` — rows stay

@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-07-26
+
+### Added
+- **Nested objects in `-j` templates**: `sel {…}` evaluates the object with
+  `sel`'s first match as the new context (null if nothing matches), and
+  `[sel {…}]` emits **one object per match** — so
+  `cull '.post' -j '{title: h2, comments: [.c {user: .u, text: .t}]}'`
+  now does real hierarchical extraction. Nests arbitrarily deep.
+- **New template filters** `| trim`, `| lower`, `| upper`, and filters now
+  **chain**: `{href: a @href | trim | lower}`.
+
+### Fixed
+- Whitespace-collapsed text (`-j` values, `--table` cells, `--has-text`
+  matching) is now layout-aware: `<br>` and block boundaries contribute a
+  space (`A<br>B` no longer glues to `AB`), and `script`/`style`/`template`
+  content no longer leaks into extracted values.
+
 ## [0.7.0] — 2026-07-26
 
 All three features in this release answer long-open feature requests on
@@ -99,7 +116,8 @@ Initial release.
   (`cull … | head` exits silently, like grep).
 - Prebuilt static binaries for 5 targets; `curl | sh` installer; Homebrew tap.
 
-[Unreleased]: https://github.com/rashida-thorne/cull/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/rashida-thorne/cull/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/rashida-thorne/cull/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/rashida-thorne/cull/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/rashida-thorne/cull/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/rashida-thorne/cull/compare/v0.4.0...v0.5.0

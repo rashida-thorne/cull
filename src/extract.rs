@@ -25,10 +25,16 @@ use serde_json::{Map, Value};
 pub enum Template {
     Object(Vec<(String, Template)>),
     Array(Box<Template>),
+    /// `sel { ... }` — evaluate `inner` with the (first) match of `selector`
+    /// as the new context element. Inside an Array, iterates every match.
+    Scoped {
+        selector: Option<Selector>,
+        inner: Box<Template>,
+    },
     Expr {
         selector: Option<Selector>,
         field: Field,
-        filter: Option<Filter>,
+        filters: Vec<Filter>,
     },
 }
 
@@ -44,6 +50,12 @@ pub enum Field {
 pub enum Filter {
     /// Extract the first number in the value ("1,234 points" → 1234).
     Num,
+    /// Trim leading/trailing whitespace (useful for attribute values).
+    Trim,
+    /// ASCII-aware Unicode lowercase.
+    Lower,
+    /// ASCII-aware Unicode uppercase.
+    Upper,
 }
 
 pub fn parse_template(src: &str) -> Result<Template, String> {
@@ -185,7 +197,8 @@ impl<'a> Parser<'a> {
         Ok(s)
     }
 
-    /// selector [ '@' field ] — selector may be quoted, or runs until , } ] @
+    /// selector [ '{' object '}' | '@' field ] [ '|' filter ]* —
+    /// selector may be quoted, or runs until , { } ] @ |
     fn parse_expr(&mut self) -> Result<Template, String> {
         self.skip_ws();
         let selector_src = if matches!(self.peek(), Some('"') | Some('\'')) {
@@ -193,7 +206,7 @@ impl<'a> Parser<'a> {
         } else {
             let mut s = String::new();
             while let Some(c) = self.peek() {
-                if matches!(c, ',' | '}' | ']' | '@' | '|') {
+                if matches!(c, ',' | '{' | '}' | ']' | '@' | '|') {
                     break;
                 }
                 s.push(c);
@@ -201,6 +214,24 @@ impl<'a> Parser<'a> {
             }
             s.trim().to_string()
         };
+
+        self.skip_ws();
+        // `sel { ... }` — scope the object to the selector's match(es).
+        if self.peek() == Some('{') && !selector_src.is_empty() {
+            let selector = if selector_src == "." {
+                None
+            } else {
+                Some(
+                    Selector::parse(&selector_src)
+                        .map_err(|e| format!("template: invalid selector {selector_src:?}: {e}"))?,
+                )
+            };
+            let inner = self.parse_object()?;
+            return Ok(Template::Scoped {
+                selector,
+                inner: Box::new(inner),
+            });
+        }
 
         if selector_src.is_empty() && self.peek() != Some('@') {
             return Err(format!(
@@ -232,8 +263,12 @@ impl<'a> Parser<'a> {
             Field::Text
         };
 
-        self.skip_ws();
-        let filter = if self.peek() == Some('|') {
+        let mut filters = Vec::new();
+        loop {
+            self.skip_ws();
+            if self.peek() != Some('|') {
+                break;
+            }
             self.bump();
             self.skip_ws();
             let mut f = String::new();
@@ -245,18 +280,19 @@ impl<'a> Parser<'a> {
                     break;
                 }
             }
-            match f.as_str() {
-                "num" => Some(Filter::Num),
+            filters.push(match f.as_str() {
+                "num" => Filter::Num,
+                "trim" => Filter::Trim,
+                "lower" => Filter::Lower,
+                "upper" => Filter::Upper,
                 "" => return Err("template: expected a filter name after '|'".into()),
                 other => {
                     return Err(format!(
-                        "template: unknown filter {other:?} (available: num)"
+                        "template: unknown filter {other:?} (available: num, trim, lower, upper)"
                     ));
                 }
-            }
-        } else {
-            None
-        };
+            });
+        }
 
         let selector = if selector_src.is_empty() || selector_src == "." {
             None
@@ -271,7 +307,7 @@ impl<'a> Parser<'a> {
         Ok(Template::Expr {
             selector,
             field,
-            filter,
+            filters,
         })
     }
 }
@@ -289,7 +325,7 @@ pub fn eval(t: &Template, ctx: ElementRef, base: Option<&str>) -> Value {
             Template::Expr {
                 selector,
                 field,
-                filter,
+                filters,
             } => {
                 let els: Vec<ElementRef> = match selector {
                     Some(sel) => ctx.select(sel).collect(),
@@ -298,41 +334,57 @@ pub fn eval(t: &Template, ctx: ElementRef, base: Option<&str>) -> Value {
                 Value::Array(
                     els.into_iter()
                         .filter_map(|el| field_value(el, field, base))
-                        .filter_map(|v| apply_filter(v, *filter))
+                        .filter_map(|v| apply_filters(v, filters))
                         .collect(),
                 )
             }
-            // Array of objects/arrays needs an element scope: use the object's
-            // first Expr selector... simpler rule: [{...}] iterates ctx itself
-            // is meaningless, so we require [selector {…}] form? v0.1: iterate
-            // over ctx children matching nothing — instead treat as single eval.
+            // `[sel {…}]` — one object per matching element.
+            Template::Scoped { selector, inner } => {
+                let els: Vec<ElementRef> = match selector {
+                    Some(sel) => ctx.select(sel).collect(),
+                    None => vec![ctx],
+                };
+                Value::Array(els.into_iter().map(|el| eval(inner, el, base)).collect())
+            }
             other => Value::Array(vec![eval(other, ctx, base)]),
         },
+        // `sel {…}` outside an array — scope to the first match (null if none).
+        Template::Scoped { selector, inner } => {
+            let el = match selector {
+                Some(sel) => ctx.select(sel).next(),
+                None => Some(ctx),
+            };
+            el.map(|el| eval(inner, el, base)).unwrap_or(Value::Null)
+        }
         Template::Expr {
             selector,
             field,
-            filter,
+            filters,
         } => {
             let el = match selector {
                 Some(sel) => ctx.select(sel).next(),
                 None => Some(ctx),
             };
             el.and_then(|el| field_value(el, field, base))
-                .and_then(|v| apply_filter(v, *filter))
+                .and_then(|v| apply_filters(v, filters))
                 .unwrap_or(Value::Null)
         }
     }
 }
 
-/// Apply an optional post-filter to an extracted value.
-fn apply_filter(v: Value, filter: Option<Filter>) -> Option<Value> {
-    match filter {
-        None => Some(v),
-        Some(Filter::Num) => match &v {
-            Value::String(s) => first_number(s),
-            _ => Some(v),
-        },
+/// Apply a chain of post-filters to an extracted value, in order.
+fn apply_filters(v: Value, filters: &[Filter]) -> Option<Value> {
+    let mut v = v;
+    for f in filters {
+        v = match (f, v) {
+            (Filter::Num, Value::String(s)) => first_number(&s)?,
+            (Filter::Trim, Value::String(s)) => Value::String(s.trim().to_string()),
+            (Filter::Lower, Value::String(s)) => Value::String(s.to_lowercase()),
+            (Filter::Upper, Value::String(s)) => Value::String(s.to_uppercase()),
+            (_, other) => other, // non-strings pass through unchanged
+        };
     }
+    Some(v)
 }
 
 /// Find the first number in a string. Commas between digits are treated as
@@ -483,6 +535,60 @@ mod tests {
         assert_eq!(v["price"], 3.5);
         assert_eq!(v["d"], -5);
         assert_eq!(v["n"], Value::Null);
+    }
+
+    #[test]
+    fn scoped_object_array() {
+        let html = Html::parse_document(
+            r#"<div class="post"><h2> A </h2>
+                 <span class="c"><b class="u">Joe</b><i class="t">hi</i></span>
+                 <span class="c"><b class="u">Amy</b><i class="t">yo</i></span>
+               </div>"#,
+        );
+        let root = html
+            .select(&Selector::parse(".post").unwrap())
+            .next()
+            .unwrap();
+        // [sel {…}] — one object per match
+        let t = parse_template("{title: h2, comments: [.c {user: .u, text: .t}]}").unwrap();
+        let v = eval(&t, root, None);
+        assert_eq!(v["title"], "A");
+        assert_eq!(v["comments"][0]["user"], "Joe");
+        assert_eq!(v["comments"][1]["text"], "yo");
+        assert_eq!(v["comments"].as_array().unwrap().len(), 2);
+        // sel {…} — scoped to first match
+        let t = parse_template("{first: .c {user: .u}}").unwrap();
+        let v = eval(&t, root, None);
+        assert_eq!(v["first"]["user"], "Joe");
+        // sel {…} with no match — null, not an error
+        let t = parse_template("{missing: .zzz {x: b}}").unwrap();
+        let v = eval(&t, root, None);
+        assert_eq!(v["missing"], Value::Null);
+        // nested arrays inside scoped objects
+        let t = parse_template("{cs: [.c {parts: [i]}]}").unwrap();
+        let v = eval(&t, root, None);
+        assert_eq!(v["cs"][0]["parts"][0], "hi");
+    }
+
+    #[test]
+    fn filter_chains() {
+        let v = eval_on_doc("{a: h2 | lower, b: .tag | upper, c: . @data-id | num}");
+        assert_eq!(v["a"], "hello world");
+        assert_eq!(v["b"], "RUST");
+        assert_eq!(v["c"], 42);
+        // chaining: trim then lower on an attribute
+        let html = Html::parse_document(r#"<a href="  /X  " class="Big Link">t</a>"#);
+        let root = html.select(&Selector::parse("a").unwrap()).next().unwrap();
+        let t = parse_template("{h: . @href | trim | lower, c: . @class | lower}").unwrap();
+        let v = eval(&t, root, None);
+        assert_eq!(v["h"], "/x");
+        assert_eq!(v["c"], "big link");
+        // filters apply per-element inside arrays
+        let v = eval_on_doc("{tags: [.tag | upper]}");
+        assert_eq!(v["tags"][0], "RUST");
+        assert_eq!(v["tags"][1], "CLI");
+        // unknown filter is a parse error
+        assert!(parse_template("{x: h2 | nope}").is_err());
     }
 
     #[test]
