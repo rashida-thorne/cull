@@ -52,6 +52,21 @@ const RAW_TEXT: &[&str] = &["script", "style", "xmp", "iframe", "noembed", "nofr
 /// Elements whose contents are whitespace-sensitive: never reformat inside.
 const PRESERVE: &[&str] = &["pre", "textarea"];
 
+/// Elements that render inline: pretty-printing keeps them on the same
+/// line as their surrounding text, because inserting a line break (which
+/// is whitespace) where the source had none would change what a browser
+/// renders — e.g. `<b>a</b><i>b</i>` is "ab" but `<b>a</b>\n<i>b</i>` is
+/// "a b". `script`/`style` are included: they render nothing, so breaking
+/// around them can silently add a space between the texts they separate.
+/// (SVG/MathML elements are not in the HTML namespace and stay on their
+/// own line; a rare space may appear next to them.)
+const INLINE: &[&str] = &[
+    "a", "abbr", "b", "bdi", "bdo", "br", "button", "cite", "code", "data", "del", "dfn", "em",
+    "i", "img", "input", "ins", "kbd", "label", "mark", "meter", "noscript", "object", "output",
+    "picture", "progress", "q", "rp", "rt", "ruby", "s", "samp", "script", "select", "slot",
+    "small", "span", "strong", "style", "sub", "sup", "textarea", "time", "u", "var", "wbr",
+];
+
 /// True if this element is in the HTML namespace. Void/raw-text/preserve
 /// rules are HTML-only: an XML `<link>` or `<title>` (e.g. in an RSS feed,
 /// parsed with `--xml`) is an ordinary element with children.
@@ -85,9 +100,16 @@ pub fn element_to_pretty_inner_html(el: ElementRef, color: bool) -> String {
     if is_html(el.value()) && (PRESERVE.contains(&name) || RAW_TEXT.contains(&name)) {
         return element_to_inner_html(el, color);
     }
+    let p = palette(color);
     let mut out = String::new();
-    for child in el.children().filter(|c| !insignificant(c)) {
-        write_pretty(child, &mut out, 0, palette(color));
+    for group in group_children(*el, p) {
+        match group {
+            Group::Run(s) => {
+                out.push_str(&s);
+                out.push('\n');
+            }
+            Group::Block(child) => write_pretty(child, &mut out, 0, p),
+        }
     }
     if out.ends_with('\n') {
         out.pop();
@@ -97,11 +119,42 @@ pub fn element_to_pretty_inner_html(el: ElementRef, color: bool) -> String {
 
 /// Serialize the outer HTML of `el` indented (2 spaces per level),
 /// optionally colored. Contents of `pre`, `textarea`, `script`, and
-/// `style` are left verbatim.
+/// `style` are left verbatim, and inline elements stay on the same line
+/// as their surrounding text so re-rendering the output is faithful.
 pub fn element_to_pretty_html(el: ElementRef, color: bool) -> String {
     let mut out = String::new();
     write_pretty(*el, &mut out, 0, palette(color));
     // Drop the trailing newline; the caller adds one per match.
+    if out.ends_with('\n') {
+        out.pop();
+    }
+    out
+}
+
+/// Serialize the whole document — DOCTYPE, top-level comments, and the
+/// root element — unformatted, optionally colored. `el` is the root
+/// element; its parent (the document node) is serialized when present.
+pub fn document_to_html(el: ElementRef, color: bool) -> String {
+    let mut out = String::new();
+    match el.parent() {
+        Some(doc) if matches!(doc.value(), Node::Document | Node::Fragment) => {
+            write_node(doc, &mut out, false, palette(color));
+        }
+        _ => write_node(*el, &mut out, false, palette(color)),
+    }
+    out
+}
+
+/// Pretty-printed variant of [`document_to_html`]: DOCTYPE and top-level
+/// comments each on their own line, then the indented root element.
+pub fn document_to_pretty_html(el: ElementRef, color: bool) -> String {
+    let mut out = String::new();
+    match el.parent() {
+        Some(doc) if matches!(doc.value(), Node::Document | Node::Fragment) => {
+            write_pretty(doc, &mut out, 0, palette(color));
+        }
+        _ => write_pretty(*el, &mut out, 0, palette(color)),
+    }
     if out.ends_with('\n') {
         out.pop();
     }
@@ -174,15 +227,6 @@ fn write_node(node: NodeRef<Node>, out: &mut String, raw_text: bool, p: &Palette
     }
 }
 
-/// True if the node contributes nothing visible (whitespace-only text).
-fn insignificant(node: &NodeRef<Node>) -> bool {
-    match node.value() {
-        Node::Text(t) => t.trim().is_empty(),
-        Node::ProcessingInstruction(_) => true,
-        _ => false,
-    }
-}
-
 fn indent(out: &mut String, depth: usize) {
     for _ in 0..depth {
         out.push_str("  ");
@@ -191,6 +235,137 @@ fn indent(out: &mut String, depth: usize) {
 
 fn collapse_ws(s: &str) -> String {
     s.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Elements that render nothing at all (metadata & friends): they can
+/// appear mid-sentence (e.g. Wikipedia emits `<link>` inside paragraphs),
+/// so breaking a line around them would inject a visible space.
+const RENDERLESS: &[&str] = &[
+    "area", "base", "datalist", "link", "meta", "param", "source", "template", "track",
+];
+
+/// True if this node belongs to an inline "run" when pretty-printing:
+/// text, comments (they render nothing, so a line break around them could
+/// add a visible space), and HTML inline elements.
+fn is_run_member(node: &NodeRef<Node>) -> bool {
+    match node.value() {
+        Node::Text(_) | Node::Comment(_) => true,
+        Node::Element(e) => {
+            is_html(e) && (INLINE.contains(&e.name()) || RENDERLESS.contains(&e.name()))
+        }
+        _ => false,
+    }
+}
+
+/// Append text collapsed to single internal spaces, preserving whether
+/// leading/trailing whitespace existed (a single space each). The leading
+/// space is skipped if `out` already ends with one.
+fn push_collapsed(t: &str, out: &mut String) {
+    let lead = t.starts_with(|c: char| c.is_whitespace());
+    let trail = t.ends_with(|c: char| c.is_whitespace());
+    let core = collapse_ws(&escape_text(t));
+    if core.is_empty() {
+        if (lead || trail) && !out.ends_with(' ') {
+            out.push(' ');
+        }
+        return;
+    }
+    if lead && !out.ends_with(' ') {
+        out.push(' ');
+    }
+    out.push_str(&core);
+    if trail {
+        out.push(' ');
+    }
+}
+
+/// Serialize one run member on the current line: text whitespace is
+/// collapsed (presence-preserving), PRESERVE/RAW_TEXT subtrees verbatim.
+fn write_inline(node: NodeRef<Node>, out: &mut String, p: &Palette) {
+    match node.value() {
+        Node::Element(e) => {
+            let name = e.name();
+            if is_html(e) && (PRESERVE.contains(&name) || RAW_TEXT.contains(&name)) {
+                write_node(node, out, false, p);
+                return;
+            }
+            open_tag(e, out, p);
+            if is_html(e) && VOID.contains(&name) {
+                return;
+            }
+            for child in node.children() {
+                write_inline(child, out, p);
+            }
+            close_tag(name, out, p);
+        }
+        Node::Text(t) => push_collapsed(t, out),
+        Node::Comment(c) => {
+            let _ = write!(out, "{}<!--{}-->{}", p.comment, c.comment, p.reset);
+        }
+        _ => {}
+    }
+}
+
+/// Render a run of inline siblings as one line; edge whitespace is
+/// trimmed (it sits at a block boundary, where it never renders).
+fn render_run(nodes: &[NodeRef<Node>], p: &Palette) -> String {
+    let mut s = String::new();
+    for n in nodes {
+        write_inline(*n, &mut s, p);
+    }
+    s.trim_matches(' ').to_string()
+}
+
+/// A block element's children, partitioned: consecutive inline members
+/// form runs (one output line each); everything else nests as a block.
+enum Group<'a> {
+    Run(String),
+    Block(NodeRef<'a, Node>),
+}
+
+fn group_children<'a>(node: NodeRef<'a, Node>, p: &Palette) -> Vec<Group<'a>> {
+    let mut groups = Vec::new();
+    let mut run: Vec<NodeRef<Node>> = Vec::new();
+    let flush = |run: &mut Vec<NodeRef<'a, Node>>, groups: &mut Vec<Group<'a>>| {
+        if run.is_empty() {
+            return;
+        }
+        // A run with visible content (text or inline elements) must stay on
+        // one line. A run of only renderless elements/comments (e.g. the
+        // <meta>/<link> stack in <head>) can safely take one line each —
+        // no visible content is adjacent to those breaks.
+        let visible = run.iter().any(|n| match n.value() {
+            Node::Text(t) => !t.trim().is_empty(),
+            Node::Element(e) => is_html(e) && INLINE.contains(&e.name()),
+            _ => false,
+        });
+        if visible {
+            let s = render_run(run, p);
+            if !s.is_empty() {
+                groups.push(Group::Run(s));
+            }
+        } else {
+            for n in run.iter() {
+                let s = render_run(std::slice::from_ref(n), p);
+                if !s.is_empty() {
+                    groups.push(Group::Run(s));
+                }
+            }
+        }
+        run.clear();
+    };
+    for child in node.children() {
+        if is_run_member(&child) {
+            run.push(child);
+        } else if matches!(child.value(), Node::ProcessingInstruction(_)) {
+            continue;
+        } else {
+            flush(&mut run, &mut groups);
+            groups.push(Group::Block(child));
+        }
+    }
+    flush(&mut run, &mut groups);
+    groups
 }
 
 fn write_pretty(node: NodeRef<Node>, out: &mut String, depth: usize, p: &Palette) {
@@ -212,33 +387,36 @@ fn write_pretty(node: NodeRef<Node>, out: &mut String, depth: usize, p: &Palette
                 out.push('\n');
                 return;
             }
-            let kids: Vec<_> = node.children().filter(|c| !insignificant(c)).collect();
-            let text_only = kids.iter().all(|c| matches!(c.value(), Node::Text(_)));
+            let groups = group_children(node, p);
             indent(out, depth);
             open_tag(e, out, p);
-            if kids.is_empty() {
-                close_tag(name, out, p);
-                out.push('\n');
-            } else if text_only {
-                let text: String = kids
-                    .iter()
-                    .map(|c| match c.value() {
-                        Node::Text(t) => collapse_ws(&escape_text(t)),
-                        _ => unreachable!(),
-                    })
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                out.push_str(&text);
-                close_tag(name, out, p);
-                out.push('\n');
-            } else {
-                out.push('\n');
-                for child in kids {
-                    write_pretty(child, out, depth + 1, p);
+            match groups.as_slice() {
+                [] => {
+                    close_tag(name, out, p);
+                    out.push('\n');
                 }
-                indent(out, depth);
-                close_tag(name, out, p);
-                out.push('\n');
+                // All-inline content fits on the element's own line.
+                [Group::Run(s)] => {
+                    out.push_str(s);
+                    close_tag(name, out, p);
+                    out.push('\n');
+                }
+                _ => {
+                    out.push('\n');
+                    for group in &groups {
+                        match group {
+                            Group::Run(s) => {
+                                indent(out, depth + 1);
+                                out.push_str(s);
+                                out.push('\n');
+                            }
+                            Group::Block(child) => write_pretty(*child, out, depth + 1, p),
+                        }
+                    }
+                    indent(out, depth);
+                    close_tag(name, out, p);
+                    out.push('\n');
+                }
             }
         }
         Node::Text(t) => {
@@ -374,17 +552,24 @@ mod tests {
 
     #[test]
     fn pretty_empty_element_one_line() {
+        // <span> is inline: it stays on the parent's line.
         assert_eq!(
             pretty("<div><span></span></div>", "div"),
-            "<div>\n  <span></span>\n</div>"
+            "<div><span></span></div>"
         );
+        assert_eq!(pretty("<div></div>", "div"), "<div></div>");
     }
 
     #[test]
     fn pretty_void_element_no_close() {
+        // <img> is inline; <hr> is a block-level void and gets its own line.
         assert_eq!(
             pretty(r#"<div><img src="i.png"></div>"#, "div"),
-            "<div>\n  <img src=\"i.png\">\n</div>"
+            "<div><img src=\"i.png\"></div>"
+        );
+        assert_eq!(
+            pretty("<div><p>a</p><hr><p>b</p></div>", "div"),
+            "<div>\n  <p>a</p>\n  <hr>\n  <p>b</p>\n</div>"
         );
     }
 
@@ -410,9 +595,65 @@ mod tests {
     }
 
     #[test]
-    fn pretty_mixed_content_each_on_own_line() {
+    fn pretty_inline_content_stays_on_one_line() {
+        // Splitting inline content across lines would insert whitespace
+        // that changes rendering; runs stay intact.
         let p = pretty("<p>before <b>bold</b> after</p>", "p");
-        assert_eq!(p, "<p>\n  before\n  <b>bold</b>\n  after\n</p>");
+        assert_eq!(p, "<p>before <b>bold</b> after</p>");
+    }
+
+    #[test]
+    fn pretty_never_adds_space_between_inline_elements() {
+        // "bolditalx" must not become "bold ital x" (rendering fidelity;
+        // the inverse of htmlq#58, which drops significant spaces).
+        let p = pretty("<p><b>bold</b><i>ital</i>x</p>", "p");
+        assert_eq!(p, "<p><b>bold</b><i>ital</i>x</p>");
+    }
+
+    #[test]
+    fn pretty_keeps_significant_space_between_inline_elements() {
+        let p = pretty("<p><b>a</b> <i>b</i></p>", "p");
+        assert_eq!(p, "<p><b>a</b> <i>b</i></p>");
+        // Newlines between inline elements collapse to one space.
+        let p = pretty("<p><b>a</b>\n  <i>b</i></p>", "p");
+        assert_eq!(p, "<p><b>a</b> <i>b</i></p>");
+    }
+
+    #[test]
+    fn pretty_mixed_inline_and_block_children() {
+        let p = pretty("<div>intro <b>x</b><p>para</p>tail</div>", "div");
+        assert_eq!(p, "<div>\n  intro <b>x</b>\n  <p>para</p>\n  tail\n</div>");
+    }
+
+    #[test]
+    fn pretty_inline_script_does_not_split_text() {
+        // <script> renders nothing: breaking around it would separate "a"
+        // and "b" with whitespace that isn't in the source.
+        let p = pretty("<p>a<script>x&&y</script>b</p>", "p");
+        assert_eq!(p, "<p>a<script>x&&y</script>b</p>");
+    }
+
+    #[test]
+    fn pretty_renderless_mid_text_stays_inline() {
+        // Wikipedia emits <link> elements mid-paragraph; breaking around
+        // them would put a space before the following comma.
+        let p = pretty("<p><sup>[update]</sup><link rel=\"x\">, more</p>", "p");
+        assert_eq!(p, "<p><sup>[update]</sup><link rel=\"x\">, more</p>");
+    }
+
+    #[test]
+    fn pretty_renderless_stack_gets_one_line_each() {
+        let p = pretty("<head><meta charset=\"a\"><link rel=\"b\"></head>", "head");
+        assert_eq!(
+            p,
+            "<head>\n  <meta charset=\"a\">\n  <link rel=\"b\">\n</head>"
+        );
+    }
+
+    #[test]
+    fn pretty_nested_inline_collapses_internal_whitespace() {
+        let p = pretty("<p><b>one\n   two</b> three</p>", "p");
+        assert_eq!(p, "<p><b>one two</b> three</p>");
     }
 
     #[test]

@@ -903,3 +903,67 @@ fn interactive_first_positional_may_be_an_input() {
         "expected a needs-a-terminal error, got: {err}"
     );
 }
+
+// ---- whole-document fidelity (v0.12.0) ----
+
+#[test]
+fn whole_doc_keeps_doctype() {
+    let html = "<!DOCTYPE html><html><head></head><body><p>hi</p></body></html>";
+    let (out, _, code) = cull(&[], Some(html));
+    assert!(
+        out.starts_with("<!DOCTYPE html>"),
+        "doctype dropped: {out:?}"
+    );
+    assert_eq!(code, 0);
+}
+
+#[test]
+fn whole_doc_pretty_keeps_doctype_on_own_line() {
+    let html = "<!DOCTYPE html><html><head></head><body><p>hi</p></body></html>";
+    let (out, _, _) = cull(&["-p"], Some(html));
+    let mut lines = out.lines();
+    assert_eq!(lines.next(), Some("<!DOCTYPE html>"));
+    assert_eq!(lines.next(), Some("<html>"));
+}
+
+#[test]
+fn whole_doc_keeps_top_level_comment() {
+    let html = "<!DOCTYPE html><!-- saved from url --><html><body>x</body></html>";
+    let (out, _, _) = cull(&[], Some(html));
+    assert!(
+        out.contains("<!-- saved from url -->"),
+        "comment lost: {out:?}"
+    );
+}
+
+#[test]
+fn selector_output_has_no_doctype() {
+    let html = "<!DOCTYPE html><html><body><p>hi</p></body></html>";
+    let (out, _, _) = cull(&["html"], Some(html));
+    assert!(out.starts_with("<html>"), "unexpected: {out:?}");
+}
+
+#[test]
+fn pretty_selected_element_keeps_inline_runs() {
+    let html = "<div><p><b>bold</b><i>ital</i>x</p></div>";
+    let (out, _, _) = cull(&["div", "-p"], Some(html));
+    assert_eq!(out, "<div>\n  <p><b>bold</b><i>ital</i>x</p>\n</div>\n");
+}
+
+#[test]
+fn pretty_inner_keeps_inline_runs() {
+    let html = "<div>intro <b>x</b><p>para</p></div>";
+    let (out, _, _) = cull(&["div", "-p", "-i"], Some(html));
+    assert_eq!(out, "intro <b>x</b>\n<p>para</p>\n");
+}
+
+#[test]
+fn bare_url_means_whole_document() {
+    // A URL is never a valid CSS selector, so it is taken as the input
+    // and the whole document (with DOCTYPE) is emitted.
+    let (url, server) = one_shot_server("<!DOCTYPE html><html><body><p>hi</p></body></html>");
+    let (out, _, code) = cull(&[&url], None);
+    assert!(out.starts_with("<!DOCTYPE html>"), "out was: {out:?}");
+    assert_eq!(code, 0);
+    server.join().unwrap();
+}

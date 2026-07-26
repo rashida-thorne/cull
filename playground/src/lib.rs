@@ -217,12 +217,16 @@ fn run(
             }
         }
         "html" => {
+            let whole_doc = selector.is_none();
             for m in &matches {
-                if pretty {
-                    writeln!(out, "{}", serialize::element_to_pretty_html(*m, false)).unwrap();
-                } else {
-                    writeln!(out, "{}", m.html()).unwrap();
-                }
+                let html = match (whole_doc, pretty) {
+                    // Whole-document mode keeps DOCTYPE + top-level comments.
+                    (true, true) => serialize::document_to_pretty_html(*m, false),
+                    (true, false) => serialize::document_to_html(*m, false),
+                    (false, true) => serialize::element_to_pretty_html(*m, false),
+                    (false, false) => m.html(),
+                };
+                writeln!(out, "{html}").unwrap();
             }
         }
         other => return Err(format!("unknown mode {other:?}")),

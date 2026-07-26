@@ -82,7 +82,7 @@ footer p{margin:6px 0}
     <tr><td><code>htmlq 'a' -a href --base URL</code></td><td><code>cull 'a' -a href -b URL</code> — automatic when the input <em>is</em> a URL</td></tr>
     <tr><td><code>htmlq --remove-nodes nav 'a'</code></td><td><code>cull 'a' -r nav</code></td></tr>
     <tr><td><code>htmlq 'a' --filename page.html</code></td><td><code>cull 'a' page.html</code></td></tr>
-    <tr><td><code>htmlq --pretty '#main'</code></td><td><code>cull -p '#main'</code> — indented, and syntax-colored on a TTY</td></tr>
+    <tr><td><code>htmlq --pretty '#main'</code></td><td><code>cull -p '#main'</code> — indented, syntax-colored on a TTY, and rendering-faithful: htmlq's <code>--pretty</code> deletes significant spaces between inline elements (<a href="https://github.com/mgdm/htmlq/issues/58">#58</a>); cull never changes what the page renders. Whole-document output also keeps the <code>&lt;!DOCTYPE&gt;</code> htmlq drops (<a href="https://github.com/mgdm/htmlq/issues/56">#56</a>)</td></tr>
     <tr><td><code>htmlq 'div:has(p)'</code> → <strong>panics</strong> (<a href="https://github.com/mgdm/htmlq/issues/65">htmlq#65</a>)</td><td><code>cull 'div:has(p)'</code> — <code>:has()</code>, <code>:is()</code>, <code>:where()</code> all work</td></tr>
   </table>
 </section>

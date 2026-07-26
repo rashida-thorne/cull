@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-07-26
+
+### Added
+- Whole-document output now keeps the `<!DOCTYPE …>` and top-level comments
+  (plain, `-p`, and `--color`). Both pup and htmlq silently drop the
+  DOCTYPE ([mgdm/htmlq#56](https://github.com/mgdm/htmlq/issues/56));
+  piping a page through `cull` no longer quirks-modes it.
+- `cull https://example.com` with no selector now works in every mode: a
+  URL can never be a valid CSS selector, so it is taken as the input and
+  the whole document is emitted (previously this errored with
+  "invalid selector" unless `--md`/`--table`/`-I` was given).
+
+### Changed
+- **`-p`/`--pretty` is now rendering-faithful.** Inline elements and text
+  stay on one line ("runs"); line breaks are only inserted at block
+  boundaries, where the added whitespace can never change what a browser
+  renders. Previously `<b>bold</b><i>ital</i>x` ("bolditalx") was split
+  across lines and re-rendered as "bold ital x" — the same class of bug as
+  htmlq's `--pretty` dropping significant spaces
+  ([mgdm/htmlq#58](https://github.com/mgdm/htmlq/issues/58)) and pup's
+  always-indented output. Render-nothing elements that appear mid-sentence
+  (`<link>`, `<meta>`, `<script>`, comments — Wikipedia does this) no
+  longer break the line around them, while `<head>`-style stacks of
+  metadata tags still get one line each. Verified: pretty-printing the
+  lobste.rs front page and a 1.1 MB Wikipedia article changes zero bytes
+  of their rendered text.
+
 ## [0.11.2] — 2026-07-26
 
 ### Fixed
@@ -191,6 +218,7 @@ Initial release.
 - Prebuilt static binaries for 5 targets; `curl | sh` installer; Homebrew tap.
 
 [Unreleased]: https://github.com/rashida-thorne/cull/compare/v0.11.2...HEAD
+[0.12.0]: https://github.com/rashida-thorne/cull/compare/v0.11.2...v0.12.0
 [0.11.2]: https://github.com/rashida-thorne/cull/compare/v0.11.1...v0.11.2
 [0.11.1]: https://github.com/rashida-thorne/cull/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/rashida-thorne/cull/compare/v0.10.0...v0.11.0

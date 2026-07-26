@@ -567,7 +567,13 @@ fn emit<W: Write>(
             let html = match (args.inner, args.pretty) {
                 (true, true) => serialize::element_to_pretty_inner_html(*m, colorize),
                 (true, false) => serialize::element_to_inner_html(*m, colorize),
+                // Whole-document mode (no selector): keep the DOCTYPE and
+                // any top-level comments, unlike htmlq (mgdm/htmlq#56).
+                (false, true) if !selector_present => {
+                    serialize::document_to_pretty_html(*m, colorize)
+                }
                 (false, true) => serialize::element_to_pretty_html(*m, colorize),
+                (false, false) if !selector_present => serialize::document_to_html(*m, colorize),
                 (false, false) if colorize => serialize::element_to_colored_html(*m),
                 (false, false) => m.html(),
             };
@@ -594,6 +600,13 @@ fn disambiguate(args: &Args) -> (Option<String>, Vec<String>) {
             } else {
                 (Some(s.clone()), args.inputs.clone())
             }
+        }
+        // A URL can never be a valid CSS selector, so in any mode
+        // `cull https://…` means "whole document from this URL".
+        Some(s) if s.starts_with("http://") || s.starts_with("https://") => {
+            let mut inputs = vec![s.clone()];
+            inputs.extend(args.inputs.iter().cloned());
+            (None, inputs)
         }
         s => (s.clone(), args.inputs.clone()),
     }

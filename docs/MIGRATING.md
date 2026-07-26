@@ -16,7 +16,7 @@ just pass the URL as the input argument (relative links resolve automatically).
 | `htmlq 'a' -a href --base URL` | `cull 'a' -a href -b URL` (automatic when the input *is* a URL) |
 | `htmlq --remove-nodes nav 'a'` | `cull 'a' -r nav` |
 | `htmlq 'a' --filename page.html` | `cull 'a' page.html` |
-| `htmlq --pretty '#main'` | `cull -p '#main'` (indented; colored on a TTY) |
+| `htmlq --pretty '#main'` | `cull -p '#main'` (indented; colored on a TTY). cull's `-p` never drops the significant spaces htmlq deletes ([#58](https://github.com/mgdm/htmlq/issues/58)), and whole-doc output keeps the DOCTYPE htmlq strips ([#56](https://github.com/mgdm/htmlq/issues/56)) |
 
 Things htmlq has no equivalent for:
 

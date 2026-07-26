@@ -263,7 +263,9 @@ apply to the preview too.
   one match (like `grep -l`)
 - `-r, --remove SEL` — delete matching nodes first (repeatable)
 - `--array` — wrap `-j` / `--json-nodes` output in a single JSON array
-- `-p, --pretty` — pretty-print: indented HTML, or indented JSON with `-j`/`--table`
+- `-p, --pretty` — pretty-print: indented HTML, or indented JSON with `-j`/`--table`.
+  Rendering-faithful: inline content stays on one line, so the output renders
+  exactly like the input (pup and htmlq both change rendered whitespace)
 - `-b, --base URL` — base for resolving relative URLs
 - `-H, --header 'Name: Value'` — add a header to URL fetches, curl-style
   (repeatable): `-H 'User-Agent: Mozilla/5.0' -H 'Cookie: session=…'`
@@ -357,7 +359,9 @@ with side-by-side command tables.
 | filter matches by text (`--has-text`) | — | [asked](https://github.com/mgdm/htmlq/issues/55) | ✓ |
 | browser-style text layout (`<br>`, blocks, `<pre>`) | — | [asked](https://github.com/mgdm/htmlq/issues/74) | ✓ |
 | colored HTML output | ✓ | — | ✓ (TTY auto-detect, `NO_COLOR`) |
-| pretty-printed HTML | always | — | opt-in (`-p`) |
+| pretty-printed HTML | always | ✓ | opt-in (`-p`) |
+| …that doesn't change rendering | adds spaces | drops spaces ([#58](https://github.com/mgdm/htmlq/issues/58)) | ✓ rendering-faithful |
+| whole-doc output keeps `<!DOCTYPE>` | dropped | dropped ([#56](https://github.com/mgdm/htmlq/issues/56)) | ✓ |
 | XML: RSS/Atom, sitemaps, SVG (`--xml`, auto-detected) | mangled | mangled | ✓ (case-sensitive, namespaces) |
 | interactive selector TUI (`-I`, live preview) | — | — | ✓ |
 | fetch URLs directly | — | — | ✓ |

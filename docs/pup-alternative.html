@@ -126,8 +126,12 @@ footer p{margin:6px 0}
 
   <p class="note"><strong>Behavior differences to know:</strong> pup prints each
   text node on its own line in <code>text{}</code>; cull collapses whitespace
-  to one line per match. pup always re-indents HTML; cull emits it verbatim
-  unless you pass <code>-p</code> (and <code>-p</code> never reformats inside
+  to one line per match. pup always re-indents HTML — which inserts whitespace that
+  can change what a browser renders (<code>&lt;b&gt;a&lt;/b&gt;&lt;i&gt;b&lt;/i&gt;</code>, "ab",
+  re-renders as "a b") and drops the <code>&lt;!DOCTYPE&gt;</code> in whole-document
+  output; cull emits HTML verbatim unless you pass <code>-p</code>, its <code>-p</code> is
+  rendering-faithful (inline content stays on one line), and whole-document output
+  keeps the DOCTYPE (and <code>-p</code> never reformats inside
   <code>pre</code>, <code>textarea</code>, <code>script</code>, or
   <code>style</code>). cull exits <code>1</code> when nothing matched,
   grep-style.</p>
