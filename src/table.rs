@@ -248,6 +248,23 @@ mod tests {
     }
 
     #[test]
+    fn cell_br_and_invisible_elements() {
+        // <br> inside a cell separates words; <style>/<script> content
+        // never leaks into the CSV.
+        let html = Html::parse_document(
+            r#"<table>
+                <tr><th>% of<br>world</th></tr>
+                <tr><td><style>td{color:red}</style>100%</td></tr>
+               </table>"#,
+        );
+        let sel = Selector::parse("table").unwrap();
+        let t = html.select(&sel).next().unwrap();
+        let g = to_grid(t);
+        assert_eq!(g[0], vec!["% of world"]);
+        assert_eq!(g[1], vec!["100%"]);
+    }
+
+    #[test]
     fn multi_row_headers_merge() {
         // Wikipedia-style: unit sub-header row under a spanned header.
         let html = Html::parse_document(

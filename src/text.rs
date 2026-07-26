@@ -2,13 +2,13 @@ use ego_tree::NodeRef;
 use scraper::{ElementRef, Node};
 
 /// Text content with whitespace collapsed to single spaces, one line.
-/// Used wherever a single-line value is wanted (JSON templates, CSV cells).
+/// Layout-aware: `<br>` and block-element boundaries become a single
+/// space (so `% of<br>world` reads "% of world", not "% ofworld"), and
+/// invisible elements (`script`, `style`, ...) contribute nothing.
+/// Used wherever a single-line value is wanted (JSON templates, CSV
+/// cells, `--has-text` matching).
 pub fn collapsed_text(el: ElementRef) -> String {
-    let mut s = String::new();
-    for chunk in el.text() {
-        s.push_str(chunk);
-    }
-    collapse_ws(&s)
+    collapse_ws(&block_text(el))
 }
 
 /// Elements that never contribute visible text.
@@ -319,6 +319,33 @@ mod tests {
     #[test]
     fn block_text_collapses_inline_ws() {
         assert_eq!(bt("<p>a\n   b</p>"), "a b");
+    }
+
+    fn ct(html: &str) -> String {
+        let doc = scraper::Html::parse_fragment(html);
+        collapsed_text(doc.root_element())
+    }
+
+    #[test]
+    fn collapsed_text_br_becomes_space() {
+        // Wikipedia header cells like `% of<br>world` must not glue.
+        assert_eq!(ct("% of<br>world"), "% of world");
+        assert_eq!(ct("a<br><br>b"), "a b");
+    }
+
+    #[test]
+    fn collapsed_text_block_boundary_becomes_space() {
+        assert_eq!(ct("<div>one</div><div>two</div>"), "one two");
+    }
+
+    #[test]
+    fn collapsed_text_skips_invisible() {
+        assert_eq!(ct("seen<style>td{color:red}</style>"), "seen");
+    }
+
+    #[test]
+    fn collapsed_text_inline_still_tight() {
+        assert_eq!(ct("gl<b>ue</b>d"), "glued");
     }
 
     #[test]
