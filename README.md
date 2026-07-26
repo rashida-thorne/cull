@@ -232,6 +232,8 @@ in templates, and links/images in `--md`.
 Hunting for the right selector usually means edit → rerun → squint → repeat.
 `-I` collapses that loop into a live TUI:
 
+![cull -I: typing a selector refines the live preview; Tab cycles HTML, text, Markdown, and JSON output; Enter prints the result](assets/cull-interactive.gif)
+
 ```sh
 cull -I https://en.wikipedia.org/wiki/Rust_(programming_language)
 # or seed it with a starting selector:
