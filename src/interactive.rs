@@ -220,6 +220,16 @@ pub fn run(
     base: Option<&str>,
     json_tmpl: Option<&extract::Template>,
 ) -> Result<(bool, bool), String> {
+    // The UI draws on stderr; if that's not a terminal the TUI would be
+    // invisible (and on Windows CI, raw-mode setup can "succeed" without a
+    // real console and then block forever waiting for keys). Refuse early.
+    {
+        use std::io::IsTerminal;
+        if !std::io::stderr().is_terminal() {
+            return Err("--interactive needs a terminal (stderr is not a TTY)".into());
+        }
+    }
+
     let modes = mode_cycle(args);
     // Preview color: honor --color=never and NO_COLOR, otherwise on (the
     // preview is always a terminal).
