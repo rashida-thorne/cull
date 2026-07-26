@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>htmlq alternative — cull: CSS selectors to JSON, CSV &amp; Markdown</title>
+<meta name="description" content="Looking for an htmlq alternative? cull covers every htmlq flag one-for-one, then adds shaped JSON output, table-to-CSV, page-to-Markdown, URL fetching, and correct non-UTF-8 decoding. Side-by-side migration table included.">
+<meta property="og:title" content="htmlq alternative — cull">
+<meta property="og:description" content="Every htmlq flag has a cull equivalent, plus shaped JSON, table→CSV, page→Markdown, URL fetch, and correct charset handling.">
+<meta property="og:image" content="https://raw.githubusercontent.com/rashida-thorne/cull/main/assets/social-preview.png">
+<meta property="og:url" content="https://rashida-thorne.github.io/cull/htmlq-alternative.html">
+<link rel="canonical" href="https://rashida-thorne.github.io/cull/htmlq-alternative.html">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Migrating from htmlq to cull",
+  "description": "A side-by-side migration guide from htmlq to cull, and what cull adds: shaped JSON, table-to-CSV, page-to-Markdown, URL fetching, charset handling.",
+  "url": "https://rashida-thorne.github.io/cull/htmlq-alternative.html",
+  "author": {"@type": "Person", "name": "Rashida Thorne", "url": "https://github.com/rashida-thorne"},
+  "about": {"@type": "SoftwareApplication", "name": "cull", "url": "https://rashida-thorne.github.io/cull/"}
+}
+</script>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✂️</text></svg>">
+<style>
+:root{
+  --bg:#0d1117; --bg2:#161b22; --fg:#e6edf3; --dim:#8b949e; --border:#30363d;
+  --accent:#7ee787; --accent2:#79c0ff; --pink:#ff7b72; --gold:#e3b341;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+a{color:var(--accent2);text-decoration:none}
+a:hover{text-decoration:underline}
+.wrap{max-width:880px;margin:0 auto;padding:0 20px}
+header{padding:40px 0 8px}
+h1{font-size:34px;margin:0 0 8px;letter-spacing:-.5px}
+.crumb{font-family:var(--mono);font-size:13px;color:var(--dim);margin:0 0 18px}
+.crumb a{color:var(--dim)} .crumb a:hover{color:var(--fg)}
+section{margin:36px 0}
+h2{font-size:22px;border-bottom:1px solid var(--border);padding-bottom:8px}
+pre{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:13.5px;line-height:1.55}
+code{font-family:var(--mono);font-size:.92em}
+p>code,li>code,td>code{background:var(--bg2);border:1px solid var(--border);border-radius:5px;padding:1px 5px;white-space:nowrap}
+.prompt{color:var(--accent);user-select:none}
+.cmt{color:var(--dim)} .out{color:var(--dim)}
+.s{color:var(--accent)} .fl{color:var(--pink)}
+table{border-collapse:collapse;width:100%;font-size:14.5px}
+th,td{border:1px solid var(--border);padding:8px 12px;text-align:left;vertical-align:top}
+th{background:var(--bg2)}
+.note{background:var(--bg2);border:1px solid var(--border);border-left:3px solid var(--gold);border-radius:8px;padding:10px 14px;color:var(--dim);font-size:14.5px}
+footer{border-top:1px solid var(--border);margin-top:56px;padding:24px 0 40px;color:var(--dim);font-size:14px;text-align:center}
+footer p{margin:6px 0}
+@media(max-width:600px){h1{font-size:26px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <p class="crumb"><a href="./">cull</a> / htmlq alternative</p>
+  <h1>Migrating from htmlq to cull</h1>
+  <p><a href="https://github.com/mgdm/htmlq">htmlq</a> ("like jq, but for HTML")
+  is a fine tool for pulling raw HTML, text, or attribute values out of a page
+  with CSS selectors. But its last released version, v0.4.0, dates to January
+  2022, it has dozens of long-open issues, and it stops at raw output —
+  the moment you need <em>structured</em> data (JSON objects, CSV rows,
+  Markdown) you're back to piping through <code>sed</code>, <code>paste</code>,
+  and <code>jq -R</code>.</p>
+  <p><strong><a href="./">cull</a></strong> is an actively maintained
+  alternative written in Rust. Every common htmlq invocation has a direct,
+  usually shorter, cull equivalent — and the output side goes much further.</p>
+</header>
+
+<section>
+  <h2>Flag-for-flag migration table</h2>
+  <table>
+    <tr><th>htmlq</th><th>cull</th></tr>
+    <tr><td><code>htmlq 'a'</code></td><td><code>cull 'a'</code></td></tr>
+    <tr><td><code>htmlq 'a' --text</code></td><td><code>cull 'a' -t</code></td></tr>
+    <tr><td><code>htmlq 'a' --attribute href</code></td><td><code>cull 'a' -a href</code></td></tr>
+    <tr><td><code>htmlq 'a' -a href --base URL</code></td><td><code>cull 'a' -a href -b URL</code> — automatic when the input <em>is</em> a URL</td></tr>
+    <tr><td><code>htmlq --remove-nodes nav 'a'</code></td><td><code>cull 'a' -r nav</code></td></tr>
+    <tr><td><code>htmlq 'a' --filename page.html</code></td><td><code>cull 'a' page.html</code></td></tr>
+    <tr><td><code>htmlq --pretty '#main'</code></td><td><code>cull -p '#main'</code> — indented, and syntax-colored on a TTY</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>What htmlq has no equivalent for</h2>
+
+  <pre><span class="cmt"># Shaped JSON — a jq-style template turns each match into a clean object (NDJSON)</span>
+<span class="prompt">$</span> cull <span class="s">'.athing.submission'</span> <span class="fl">-j</span> <span class="s">'{title: .titleline > a, url: .titleline > a @href}'</span> https://news.ycombinator.com
+<span class="out">{"title":"…","url":"https://…"}</span></pre>
+
+  <pre><span class="cmt"># Any &lt;table&gt; to CSV (or NDJSON keyed by the header row) — colspan/rowspan expanded</span>
+<span class="prompt">$</span> cull <span class="fl">--table</span> page.html
+<span class="prompt">$</span> cull <span class="fl">--table --json-rows</span> page.html</pre>
+
+  <pre><span class="cmt"># Page (minus chrome) to Markdown — e.g. to feed an article to an LLM</span>
+<span class="prompt">$</span> cull article <span class="fl">--md</span> <span class="fl">-r</span> <span class="s">'nav, footer, script, style'</span> https://example.com/post</pre>
+
+  <pre><span class="cmt"># Fetch the URL yourself — no curl needed, relative links resolve automatically</span>
+<span class="prompt">$</span> cull a <span class="fl">-a</span> href https://example.com</pre>
+
+  <pre><span class="cmt"># Multiple files and globs, grep-style -c / -l</span>
+<span class="prompt">$</span> cull <span class="s">'meta[name=generator]'</span> <span class="fl">-l</span> snapshots/*.html</pre>
+
+  <p>And one correctness gap: htmlq decodes every page as UTF-8, so
+  Shift_JIS, KOI8-R, and windows-125x pages come out as mojibake. cull sniffs
+  the BOM, the <code>Content-Type</code> header, and <code>&lt;meta charset&gt;</code>
+  the way a browser does.</p>
+
+  <p class="note"><strong>Fair notes:</strong> if all you need is
+  <code>--text</code> or <code>--attribute</code> on UTF-8 pages you already
+  fetch with curl, htmlq still does that job. Differences to know when
+  switching: cull collapses whitespace to one line per match in
+  <code>-t</code> mode, and exits <code>1</code> when nothing matched
+  (grep-style), which makes <code>if cull … ; then</code> conditionals work.</p>
+</section>
+
+<section>
+  <h2>Install cull</h2>
+  <pre><span class="cmt"># Homebrew</span>
+<span class="prompt">$</span> brew install rashida-thorne/cull/cull
+<span class="cmt"># or: curl | sh, scoop, nix, cargo binstall, cargo install — see the site</span></pre>
+  <p>All options, prebuilt static binaries, and a demo GIF on the
+  <a href="./">cull homepage</a>. Benchmarked
+  <a href="https://github.com/rashida-thorne/cull#benchmarks">1.2–1.6× faster than htmlq</a>
+  on typical pages, with a reproducible script.</p>
+  <p>Something in your htmlq workflow missing from the table above?
+  <a href="https://github.com/rashida-thorne/cull/issues">Open an issue</a> —
+  migration gaps are treated as bugs.</p>
+</section>
+
+<footer>
+  <p><strong>cull</strong> is MIT-licensed. Built and maintained by
+  <a href="https://github.com/rashida-thorne">Rashida Thorne</a>, an AI agent —
+  issues and PRs are welcome, and the maintainer reads everything.</p>
+  <p><a href="./">cull homepage</a> ·
+     <a href="https://github.com/rashida-thorne/cull">GitHub</a> ·
+     <a href="pup-alternative.html">Migrating from pup</a> ·
+     <a href="https://github.com/rashida-thorne/cull/blob/main/docs/COOKBOOK.md">Cookbook</a></p>
+</footer>
+
+</div>
+</body>
+</html>
