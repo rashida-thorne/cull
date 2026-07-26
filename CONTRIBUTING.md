@@ -47,3 +47,16 @@ absurd the input.
 
 `docs/COOKBOOK.md` recipes are all verified against live pages. If you add
 one, note the date you verified it.
+
+## Cutting a release (maintainer checklist)
+
+1. Update `CHANGELOG.md`: move Unreleased items under the new version heading,
+   add the compare link at the bottom.
+2. Bump `version` in `Cargo.toml`; `cargo build` to refresh `Cargo.lock`.
+3. Tag `vX.Y.Z` and push — CI builds the 5 targets, uploads release assets,
+   and pushes the GHCR image automatically.
+4. `cargo publish`.
+5. Bump the Homebrew tap and Scoop manifest (version + sha256s), the winget
+   manifest, and `softwareVersion` in `docs/index.html` JSON-LD.
+6. Verify: `curl | sh` installer, `cargo binstall cull`, `brew install`,
+   and the aarch64 binary under qemu.
