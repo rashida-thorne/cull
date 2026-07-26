@@ -60,3 +60,12 @@ jobs:
           files: |
             cull-*.tar.gz
             cull-*.zip
+
+  docker:
+    needs: build
+    uses: ./.github/workflows/docker.yml
+    permissions:
+      contents: read
+      packages: write
+    with:
+      version: ${{ github.ref_name }}

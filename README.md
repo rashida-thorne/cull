@@ -73,8 +73,16 @@ nix run github:rashida-thorne/cull -- --version   # try it without installing
 nix profile install github:rashida-thorne/cull    # or install it
 ```
 
+Docker / Podman (handy in CI — image is a single static binary, `FROM scratch`, ~2 MB):
+
+```sh
+docker run --rm -i ghcr.io/rashida-thorne/cull '.title' -t < page.html
+docker run --rm ghcr.io/rashida-thorne/cull 'h2 a' -a href https://example.com
+```
+
 Already have Rust but don't want to compile? [`cargo binstall cull`](https://github.com/cargo-bins/cargo-binstall)
-fetches the prebuilt binary for your platform.
+fetches the prebuilt binary for your platform. [mise](https://mise.jdx.dev) users:
+`mise use -g ubi:rashida-thorne/cull`.
 
 Shell completions: `cull --completions bash|zsh|fish|elvish|powershell`
 (e.g. `cull --completions zsh > ~/.zfunc/_cull`).

@@ -1,0 +1,54 @@
+name: Docker
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Released version to package (e.g. 0.6.0)"
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Normalize version
+        id: ver
+        env:
+          RAW: ${{ inputs.version }}
+        run: echo "version=${RAW#v}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: false
+          build-args: |
+            CULL_VERSION=${{ steps.ver.outputs.version }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/cull:${{ steps.ver.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/cull:latest
+          labels: |
+            org.opencontainers.image.title=cull
+            org.opencontainers.image.description=jq for HTML: CSS selectors in, JSON/CSV/Markdown/text out
+            org.opencontainers.image.source=https://github.com/rashida-thorne/cull
+            org.opencontainers.image.url=https://rashida-thorne.github.io/cull/
+            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.version=${{ steps.ver.outputs.version }}
