@@ -15,3 +15,14 @@ pub mod serialize;
 pub mod table;
 pub mod text;
 pub mod xml;
+
+/// Like [`scraper::Html::root_element`], but returns `None` instead of
+/// panicking when the parsed tree contains no element at all (possible for
+/// XML input that is only a `<?xml ...?>` declaration, comments, or PIs).
+pub fn try_root_element(doc: &scraper::Html) -> Option<scraper::ElementRef<'_>> {
+    doc.tree
+        .root()
+        .children()
+        .find(|child| child.value().is_element())
+        .and_then(scraper::ElementRef::wrap)
+}

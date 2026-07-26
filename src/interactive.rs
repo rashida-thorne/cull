@@ -143,7 +143,7 @@ fn compute_matches<'a>(
     args: &Args,
 ) -> Result<Vec<ElementRef<'a>>, String> {
     let matches: Vec<ElementRef> = if sel_src.trim().is_empty() {
-        vec![doc.root_element()]
+        cull::try_root_element(doc).into_iter().collect()
     } else {
         let sel = Selector::parse(sel_src).map_err(|e| format!("{e}"))?;
         doc.select(&sel).collect()

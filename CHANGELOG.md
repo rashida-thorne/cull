@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.2] — 2026-07-26
+
+### Fixed
+- No more panic on element-less documents: input that parses to a tree with
+  no root element (e.g. only an `<?xml version="1.0"?>` declaration, or
+  `--xml` with a comment-only body) used to abort with
+  `html node missing` when run in whole-document modes (`--md`, `--table`,
+  `--json-nodes`, no-selector). It now behaves like "no matches"
+  (exit code 1). Found by the extended fuzz harness, which now also covers
+  XML mode, nested `-j` templates, and `--json-nodes`.
+
 ## [0.11.1] — 2026-07-26
 
 ### Fixed
@@ -179,7 +190,8 @@ Initial release.
   (`cull … | head` exits silently, like grep).
 - Prebuilt static binaries for 5 targets; `curl | sh` installer; Homebrew tap.
 
-[Unreleased]: https://github.com/rashida-thorne/cull/compare/v0.11.1...HEAD
+[Unreleased]: https://github.com/rashida-thorne/cull/compare/v0.11.2...HEAD
+[0.11.2]: https://github.com/rashida-thorne/cull/compare/v0.11.1...v0.11.2
 [0.11.1]: https://github.com/rashida-thorne/cull/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/rashida-thorne/cull/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/rashida-thorne/cull/compare/v0.9.0...v0.10.0

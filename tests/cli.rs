@@ -763,6 +763,30 @@ fn xml_template_over_feed() {
 }
 
 #[test]
+fn elementless_xml_does_not_panic() {
+    // A document that is only an <?xml ?> declaration parses to a tree with
+    // no root element; whole-document modes must not panic (scraper's
+    // root_element() would). Regression: fuzz-found panic in v0.11.1.
+    for args in [
+        vec!["--md"],
+        vec!["--table"],
+        vec!["--json-nodes"],
+        vec!["*", "-t"],
+    ] {
+        let (_, err, code) = cull(&args, Some("<?xml version=\"1.0\"?>"));
+        assert!(!err.contains("panicked"), "args {args:?} panicked: {err}");
+        assert!(code == 0 || code == 1, "args {args:?} exit code {code}");
+    }
+    // Same via explicit --xml with a comment-only body.
+    let (_, err, code) = cull(
+        &["--md", "--xml"],
+        Some("<?xml version=\"1.0\"?><!-- only a comment -->"),
+    );
+    assert!(!err.contains("panicked"), "stderr: {err}");
+    assert!(code == 0 || code == 1);
+}
+
+#[test]
 fn xml_explicit_flag_malformed_is_error() {
     let (out, err, code) = cull(&["a", "--xml"], Some("<a><b></a>"));
     assert_eq!(out, "");

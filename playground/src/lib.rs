@@ -146,7 +146,7 @@ fn run(
 
     let matches: Vec<ElementRef> = match &selector {
         Some(sel) => doc.select(sel).collect(),
-        None => vec![doc.root_element()],
+        None => cull::try_root_element(&doc).into_iter().collect(),
     };
     let matches: Vec<ElementRef> = if first {
         matches.into_iter().take(1).collect()

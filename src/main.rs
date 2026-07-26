@@ -333,7 +333,7 @@ fn run(args: &Args) -> Result<(bool, bool), String> {
 
         let matches: Vec<ElementRef> = match &selector {
             Some(sel) => doc.select(sel).collect(),
-            None => vec![doc.root_element()],
+            None => cull::try_root_element(&doc).into_iter().collect(),
         };
 
         // --has-text: keep matches whose (collapsed) text contains every
