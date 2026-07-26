@@ -99,5 +99,10 @@ URL). cull auto-detects XML and parses it for real:
 cull item -j '{title: title, url: link, date: pubDate}' https://lobste.rs/rss
 ```
 
+And when you don't yet *know* the selector, `cull -I <url-or-file>` opens a
+live-preview TUI: edit the selector, watch matches update per keystroke, Tab
+through output shapes, Enter to print. pup and htmlq have no equivalent —
+the usual workflow there is rerunning the command until it looks right.
+
 Something missing from these tables? [Open an issue](https://github.com/rashida-thorne/cull/issues)
 — migration gaps are treated as bugs.

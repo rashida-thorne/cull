@@ -814,3 +814,55 @@ fn xml_sitemap_locs() {
     assert_eq!(out, "https://example.com/a\nhttps://example.com/b\n");
     assert_eq!(code, 0);
 }
+
+// ---- -I / --interactive (non-TTY error paths only; the TUI itself needs a
+// real terminal and is exercised by unit tests + a pty harness) ----
+
+/// Run cull with everything piped (no tty anywhere) and a watchdog, so a
+/// regression that makes -I wait for terminal input can never hang CI.
+fn cull_no_tty(args: &[&str]) -> (String, i32) {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_cull"))
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn cull");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    loop {
+        match child.try_wait().expect("try_wait") {
+            Some(_) => break,
+            None if std::time::Instant::now() > deadline => {
+                let _ = child.kill();
+                panic!("cull -I hung without a terminal");
+            }
+            None => std::thread::sleep(std::time::Duration::from_millis(50)),
+        }
+    }
+    let out = child.wait_with_output().expect("wait");
+    (
+        String::from_utf8_lossy(&out.stderr).into_owned(),
+        out.status.code().unwrap_or(-1),
+    )
+}
+
+#[test]
+fn interactive_without_terminal_errors_cleanly() {
+    let (err, code) = cull_no_tty(&["-I", "p", &fixture("blog.html")]);
+    assert_eq!(code, 2, "stderr: {err}");
+    assert!(err.contains("cull:"), "stderr: {err}");
+}
+
+#[test]
+fn interactive_rejects_multiple_inputs() {
+    let (err, code) = cull_no_tty(&["-I", "p", &fixture("blog.html"), &fixture("blog.html")]);
+    assert_eq!(code, 2);
+    assert!(err.contains("single input"), "stderr: {err}");
+}
+
+#[test]
+fn interactive_conflicts_with_count() {
+    let (err, code) = cull_no_tty(&["-I", "-c", "p", &fixture("blog.html")]);
+    assert_eq!(code, 2);
+    assert!(err.contains("cannot be used with"), "stderr: {err}");
+}

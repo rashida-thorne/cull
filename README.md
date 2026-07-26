@@ -45,6 +45,11 @@ actually needs to go:
   is lost — try it in pup or htmlq), and lowercase `pubDate`. `cull`
   auto-detects XML and parses it for real; selectors become case-sensitive
   and namespaced tags work (`media\:thumbnail @url`).
+- **`-I` interactive mode** — a live-preview TUI for *finding* the right
+  selector: type, watch the matches update on every keystroke, Tab through
+  output shapes (HTML / text / Markdown / JSON), Enter prints the result to
+  stdout. The UI draws on stderr, so it still composes with pipes:
+  `curl -s https://example.com | cull -I | less`.
 
 ## Install
 
@@ -222,6 +227,28 @@ cull a -a href -b https://example.com page.html
 When the input *is* a URL, `--base` defaults to it. Applies to `-a`, `@attr`
 in templates, and links/images in `--md`.
 
+### Interactive mode
+
+Hunting for the right selector usually means edit → rerun → squint → repeat.
+`-I` collapses that loop into a live TUI:
+
+```sh
+cull -I https://en.wikipedia.org/wiki/Rust_(programming_language)
+# or seed it with a starting selector:
+curl -s https://news.ycombinator.com | cull -I '.athing'
+```
+
+- type to edit the selector — the preview and match count update per keystroke
+- **Tab** cycles the output shape: HTML → text → Markdown → JSON node tree
+  (plus whatever flags you launched with, e.g. `-j '{…}'` or `--table`)
+- **↑/↓/PgUp/PgDn** scroll the preview, **Enter** prints the current result
+  to stdout and exits, **Esc** quits without printing
+
+The UI draws on **stderr** and reads keys from the terminal, so stdin can be
+a pipe and stdout stays clean: `curl -s … | cull -I | tee picked.html` works
+exactly like you'd hope. Flags like `--has-text`, `-1`, `-r`, and `-b` all
+apply to the preview too.
+
 ### Other flags
 
 - `-i, --inner` — print inner HTML (children only, no outer tag)
@@ -330,6 +357,7 @@ with side-by-side command tables.
 | colored HTML output | ✓ | — | ✓ (TTY auto-detect, `NO_COLOR`) |
 | pretty-printed HTML | always | — | opt-in (`-p`) |
 | XML: RSS/Atom, sitemaps, SVG (`--xml`, auto-detected) | mangled | mangled | ✓ (case-sensitive, namespaces) |
+| interactive selector TUI (`-I`, live preview) | — | — | ✓ |
 | fetch URLs directly | — | — | ✓ |
 | multiple inputs / globs (`-c`, `-l` per file) | — | — | ✓ |
 | resolve relative URLs | — | ✓ (`-b`) | ✓ (auto for URLs) |

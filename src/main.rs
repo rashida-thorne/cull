@@ -1,5 +1,8 @@
 use clap::Parser;
 use cull::{decode, extract, markdown, nodes, serialize, table, text, xml};
+
+#[cfg(feature = "interactive")]
+mod interactive;
 use scraper::{ElementRef, Html, Selector};
 use std::io::{Read, Write};
 use std::process::ExitCode;
@@ -13,7 +16,7 @@ use std::process::ExitCode;
 ///   cull '.post' -j '{title: h2, url: a @href}' page.html
 ///   cull --table page.html
 ///   cull article --md https://example.com/post
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 #[command(name = "cull", version, about, verbatim_doc_comment)]
 struct Args {
     /// CSS selector (omit with --table/--md to use the whole document)
@@ -107,6 +110,17 @@ struct Args {
     /// Force HTML parsing even for inputs that look like XML
     #[arg(long)]
     html: bool,
+
+    /// Interactive mode: edit the selector in a live-preview TUI
+    /// (type to refine, Tab cycles output mode, Enter prints the result
+    /// to stdout, Esc quits). Takes one input; the UI draws on stderr,
+    /// so the printed result still pipes cleanly
+    #[arg(
+        short = 'I',
+        long,
+        conflicts_with_all = ["count", "files_with_matches"]
+    )]
+    interactive: bool,
 
     /// Colorize HTML output: auto (default; TTY only), always, never
     #[arg(long, value_name = "WHEN", value_enum, default_value_t = ColorWhen::Auto)]
@@ -252,10 +266,6 @@ fn run(args: &Args) -> Result<(bool, bool), String> {
     let (selector_src, inputs) = disambiguate(args);
 
     // Parse selectors and templates once, up front (errors here are fatal).
-    let selector = match &selector_src {
-        Some(s) => Some(Selector::parse(s).map_err(|e| format!("invalid selector {s:?}: {e}"))?),
-        None => None,
-    };
     let remove_sels: Vec<Selector> = args
         .remove
         .iter()
@@ -270,6 +280,21 @@ fn run(args: &Args) -> Result<(bool, bool), String> {
         vec!["-".to_string()]
     } else {
         inputs
+    };
+
+    if args.interactive {
+        return run_interactive(
+            args,
+            &inputs,
+            selector_src.as_deref(),
+            &remove_sels,
+            json_tmpl.as_ref(),
+        );
+    }
+
+    let selector = match &selector_src {
+        Some(s) => Some(Selector::parse(s).map_err(|e| format!("invalid selector {s:?}: {e}"))?),
+        None => None,
     };
     let multi = inputs.len() > 1;
     let colorize = args.color.enabled();
@@ -292,39 +317,14 @@ fn run(args: &Args) -> Result<(bool, bool), String> {
                 continue;
             }
         };
-        let mut doc = if args.xml {
-            match xml::parse_xml(&html_src) {
-                Ok(doc) => doc,
-                Err(e) => {
-                    eprintln!("cull: {input}: {e}");
-                    had_error = true;
-                    continue;
-                }
+        let doc = match parse_doc(&html_src, args, input, &remove_sels) {
+            Ok(doc) => doc,
+            Err(e) => {
+                eprintln!("cull: {e}");
+                had_error = true;
+                continue;
             }
-        } else if !args.html && xml::looks_like_xml(&html_src) {
-            match xml::parse_xml(&html_src) {
-                Ok(doc) => doc,
-                Err(e) => {
-                    // Auto-detection guessed wrong or the feed is broken:
-                    // fall back to the forgiving HTML parser, but say so.
-                    eprintln!("cull: {input}: looks like XML but: {e}; parsing as HTML");
-                    Html::parse_document(&html_src)
-                }
-            }
-        } else {
-            Html::parse_document(&html_src)
         };
-
-        // --remove: detach matching nodes before any selection or conversion.
-        for sel in &remove_sels {
-            let ids: Vec<_> = doc.select(sel).map(|el| el.id()).collect();
-            for id in ids {
-                if let Some(mut node) = doc.tree.get_mut(id) {
-                    node.detach();
-                }
-            }
-        }
-        let doc = doc;
 
         // Auto-base: if this input is a URL and --base not given, use it.
         let base = args.base.clone().or_else(|| {
@@ -375,87 +375,16 @@ fn run(args: &Args) -> Result<(bool, bool), String> {
             continue;
         }
 
-        let found = if args.table {
-            table::run(
-                &matches,
-                selector.is_some(),
-                args.json_rows,
-                args.pretty,
-                &mut out,
-            )?
-        } else if args.md {
-            let mut any = false;
-            for m in &matches {
-                let md = markdown::element_to_markdown(*m, base.as_deref());
-                if !md.trim().is_empty() {
-                    any = true;
-                    writeln!(out, "{}", md.trim_end()).map_err(io_err)?;
-                }
-            }
-            any
-        } else if let Some(tmpl) = &json_tmpl {
-            let values: Vec<serde_json::Value> = matches
-                .iter()
-                .map(|m| extract::eval(tmpl, *m, base.as_deref()))
-                .collect();
-            let any = !values.is_empty();
-            if args.array {
-                array_acc.extend(values);
-            } else {
-                for v in values {
-                    writeln!(out, "{}", fmt_json(&v, args.pretty)).map_err(io_err)?;
-                }
-            }
-            any
-        } else if args.json_nodes {
-            let values: Vec<serde_json::Value> = matches
-                .iter()
-                .map(|m| nodes::element_to_json(*m, base.as_deref()))
-                .collect();
-            let any = !values.is_empty();
-            if args.array {
-                array_acc.extend(values);
-            } else {
-                for v in values {
-                    writeln!(out, "{}", fmt_json(&v, args.pretty)).map_err(io_err)?;
-                }
-            }
-            any
-        } else if let Some(attr) = &args.attr {
-            let mut any = false;
-            for m in &matches {
-                if let Some(v) = m.value().attr(attr) {
-                    any = true;
-                    let v = text::maybe_resolve(attr, v, base.as_deref());
-                    writeln!(out, "{v}").map_err(io_err)?;
-                }
-            }
-            any
-        } else if args.text {
-            let mut any = false;
-            for m in &matches {
-                let t = text::block_text(*m);
-                if !t.is_empty() {
-                    any = true;
-                    writeln!(out, "{t}").map_err(io_err)?;
-                }
-            }
-            any
-        } else {
-            let mut any = false;
-            for m in &matches {
-                any = true;
-                let html = match (args.inner, args.pretty) {
-                    (true, true) => serialize::element_to_pretty_inner_html(*m, colorize),
-                    (true, false) => serialize::element_to_inner_html(*m, colorize),
-                    (false, true) => serialize::element_to_pretty_html(*m, colorize),
-                    (false, false) if colorize => serialize::element_to_colored_html(*m),
-                    (false, false) => m.html(),
-                };
-                writeln!(out, "{html}").map_err(io_err)?;
-            }
-            any
-        };
+        let found = emit(
+            args,
+            &matches,
+            selector.is_some(),
+            base.as_deref(),
+            json_tmpl.as_ref(),
+            colorize,
+            &mut array_acc,
+            &mut out,
+        )?;
         found_any |= found;
     }
 
@@ -469,6 +398,184 @@ fn run(args: &Args) -> Result<(bool, bool), String> {
     }
 
     Ok((found_any, had_error))
+}
+
+/// Parse one input into a document (HTML, or XML by flag/auto-detection)
+/// and apply --remove. Warns on stderr when XML auto-detection has to fall
+/// back to the HTML parser.
+fn parse_doc(
+    html_src: &str,
+    args: &Args,
+    input: &str,
+    remove_sels: &[Selector],
+) -> Result<Html, String> {
+    let mut doc = if args.xml {
+        xml::parse_xml(html_src).map_err(|e| format!("{input}: {e}"))?
+    } else if !args.html && xml::looks_like_xml(html_src) {
+        match xml::parse_xml(html_src) {
+            Ok(doc) => doc,
+            Err(e) => {
+                // Auto-detection guessed wrong or the feed is broken:
+                // fall back to the forgiving HTML parser, but say so.
+                eprintln!("cull: {input}: looks like XML but: {e}; parsing as HTML");
+                Html::parse_document(html_src)
+            }
+        }
+    } else {
+        Html::parse_document(html_src)
+    };
+
+    // --remove: detach matching nodes before any selection or conversion.
+    for sel in remove_sels {
+        let ids: Vec<_> = doc.select(sel).map(|el| el.id()).collect();
+        for id in ids {
+            if let Some(mut node) = doc.tree.get_mut(id) {
+                node.detach();
+            }
+        }
+    }
+    Ok(doc)
+}
+
+/// Set up the document and hand off to the -I live-preview TUI.
+#[cfg(feature = "interactive")]
+fn run_interactive(
+    args: &Args,
+    inputs: &[String],
+    selector_src: Option<&str>,
+    remove_sels: &[Selector],
+    json_tmpl: Option<&extract::Template>,
+) -> Result<(bool, bool), String> {
+    use std::io::IsTerminal;
+    if inputs.len() > 1 {
+        return Err("--interactive takes a single input".into());
+    }
+    let input = &inputs[0];
+    if input == "-" && std::io::stdin().is_terminal() {
+        return Err(
+            "--interactive needs input: pipe HTML in, or give a file or URL argument".into(),
+        );
+    }
+    let html_src = read_input(input, args)?;
+    let doc = parse_doc(&html_src, args, input, remove_sels)?;
+
+    // Auto-base, same as the normal path.
+    let base = args.base.clone().or_else(|| {
+        (input.starts_with("http://") || input.starts_with("https://")).then(|| input.clone())
+    });
+
+    interactive::run(
+        args,
+        &doc,
+        selector_src.unwrap_or(""),
+        input,
+        base.as_deref(),
+        json_tmpl,
+    )
+}
+
+#[cfg(not(feature = "interactive"))]
+fn run_interactive(
+    _args: &Args,
+    _inputs: &[String],
+    _selector_src: Option<&str>,
+    _remove_sels: &[Selector],
+    _json_tmpl: Option<&extract::Template>,
+) -> Result<(bool, bool), String> {
+    Err("this build of cull was compiled without the `interactive` feature".into())
+}
+
+/// Render one input's matches into `out` according to the output flags.
+/// Returns whether anything matched. With --json/--json-nodes and --array,
+/// values are pushed onto `array_acc` instead of written (the caller prints
+/// the merged array once, after all inputs).
+#[allow(clippy::too_many_arguments)]
+fn emit<W: Write>(
+    args: &Args,
+    matches: &[ElementRef],
+    selector_present: bool,
+    base: Option<&str>,
+    json_tmpl: Option<&extract::Template>,
+    colorize: bool,
+    array_acc: &mut Vec<serde_json::Value>,
+    out: &mut W,
+) -> Result<bool, String> {
+    let found = if args.table {
+        table::run(matches, selector_present, args.json_rows, args.pretty, out)?
+    } else if args.md {
+        let mut any = false;
+        for m in matches {
+            let md = markdown::element_to_markdown(*m, base);
+            if !md.trim().is_empty() {
+                any = true;
+                writeln!(out, "{}", md.trim_end()).map_err(io_err)?;
+            }
+        }
+        any
+    } else if let Some(tmpl) = json_tmpl {
+        let values: Vec<serde_json::Value> = matches
+            .iter()
+            .map(|m| extract::eval(tmpl, *m, base))
+            .collect();
+        let any = !values.is_empty();
+        if args.array {
+            array_acc.extend(values);
+        } else {
+            for v in values {
+                writeln!(out, "{}", fmt_json(&v, args.pretty)).map_err(io_err)?;
+            }
+        }
+        any
+    } else if args.json_nodes {
+        let values: Vec<serde_json::Value> = matches
+            .iter()
+            .map(|m| nodes::element_to_json(*m, base))
+            .collect();
+        let any = !values.is_empty();
+        if args.array {
+            array_acc.extend(values);
+        } else {
+            for v in values {
+                writeln!(out, "{}", fmt_json(&v, args.pretty)).map_err(io_err)?;
+            }
+        }
+        any
+    } else if let Some(attr) = &args.attr {
+        let mut any = false;
+        for m in matches {
+            if let Some(v) = m.value().attr(attr) {
+                any = true;
+                let v = text::maybe_resolve(attr, v, base);
+                writeln!(out, "{v}").map_err(io_err)?;
+            }
+        }
+        any
+    } else if args.text {
+        let mut any = false;
+        for m in matches {
+            let t = text::block_text(*m);
+            if !t.is_empty() {
+                any = true;
+                writeln!(out, "{t}").map_err(io_err)?;
+            }
+        }
+        any
+    } else {
+        let mut any = false;
+        for m in matches {
+            any = true;
+            let html = match (args.inner, args.pretty) {
+                (true, true) => serialize::element_to_pretty_inner_html(*m, colorize),
+                (true, false) => serialize::element_to_inner_html(*m, colorize),
+                (false, true) => serialize::element_to_pretty_html(*m, colorize),
+                (false, false) if colorize => serialize::element_to_colored_html(*m),
+                (false, false) => m.html(),
+            };
+            writeln!(out, "{html}").map_err(io_err)?;
+        }
+        any
+    };
+    Ok(found)
 }
 
 /// `cull --md page.html [more.html ...]` puts an input in the selector slot;

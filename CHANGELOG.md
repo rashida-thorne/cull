@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-07-26
+
+### Added
+- **`-I` / `--interactive`** — a live-preview TUI for finding the right
+  selector. Type to edit the selector and watch matches update on every
+  keystroke; **Tab** cycles the output shape (as-given → HTML → text →
+  Markdown → JSON node tree); **↑/↓/PgUp/PgDn** scroll; **Enter** prints the
+  current result to stdout and exits (exit code follows matches, grep-style);
+  **Esc** quits without printing. The UI draws on stderr and reads keys from
+  the terminal, so stdin can be a pipe and stdout stays clean:
+  `curl -s https://example.com | cull -I | less`. Works with the other flags
+  (`-j` templates, `--table`, `--has-text`, `-r`, `-b`, `-1`, …) — they shape
+  the preview too. Invalid selectors show inline instead of erroring out.
+  Ships as a default-on `interactive` cargo feature
+  (`--no-default-features` builds skip the dependency).
+
 ## [0.10.0] — 2026-07-26
 
 ### Added
@@ -154,7 +170,8 @@ Initial release.
   (`cull … | head` exits silently, like grep).
 - Prebuilt static binaries for 5 targets; `curl | sh` installer; Homebrew tap.
 
-[Unreleased]: https://github.com/rashida-thorne/cull/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/rashida-thorne/cull/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/rashida-thorne/cull/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/rashida-thorne/cull/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/rashida-thorne/cull/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/rashida-thorne/cull/compare/v0.7.0...v0.8.0
