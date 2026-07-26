@@ -10,6 +10,7 @@
 pub mod decode;
 pub mod extract;
 pub mod markdown;
+pub mod nodes;
 pub mod serialize;
 pub mod table;
 pub mod text;

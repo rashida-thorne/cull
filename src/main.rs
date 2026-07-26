@@ -1,5 +1,5 @@
 use clap::Parser;
-use cull::{decode, extract, markdown, serialize, table, text};
+use cull::{decode, extract, markdown, nodes, serialize, table, text};
 use scraper::{ElementRef, Html, Selector};
 use std::io::{Read, Write};
 use std::process::ExitCode;
@@ -44,6 +44,11 @@ struct Args {
     #[arg(short = 'j', long, value_name = "TEMPLATE")]
     json: Option<String>,
 
+    /// Dump each match as a JSON node tree: {tag, attrs, text, children}
+    /// (pup's json{}, with attrs in their own object; pipe to jq)
+    #[arg(long)]
+    json_nodes: bool,
+
     /// Extract tables as CSV (or NDJSON with --json-rows)
     #[arg(long)]
     table: bool,
@@ -60,7 +65,7 @@ struct Args {
     #[arg(short = '1', long)]
     first: bool,
 
-    /// Wrap --json output in a single JSON array instead of NDJSON
+    /// Wrap --json / --json-nodes output in a single JSON array instead of NDJSON
     #[arg(long)]
     array: bool,
 
@@ -371,6 +376,20 @@ fn run(args: &Args) -> Result<(bool, bool), String> {
                 }
             }
             any
+        } else if args.json_nodes {
+            let values: Vec<serde_json::Value> = matches
+                .iter()
+                .map(|m| nodes::element_to_json(*m, base.as_deref()))
+                .collect();
+            let any = !values.is_empty();
+            if args.array {
+                array_acc.extend(values);
+            } else {
+                for v in values {
+                    writeln!(out, "{}", fmt_json(&v, args.pretty)).map_err(io_err)?;
+                }
+            }
+            any
         } else if let Some(attr) = &args.attr {
             let mut any = false;
             for m in &matches {
@@ -409,7 +428,11 @@ fn run(args: &Args) -> Result<(bool, bool), String> {
         found_any |= found;
     }
 
-    if json_tmpl.is_some() && args.array && !args.count && !args.files_with_matches {
+    if (json_tmpl.is_some() || args.json_nodes)
+        && args.array
+        && !args.count
+        && !args.files_with_matches
+    {
         let v = serde_json::Value::Array(array_acc);
         writeln!(out, "{}", fmt_json(&v, args.pretty)).map_err(io_err)?;
     }

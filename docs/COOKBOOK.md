@@ -163,6 +163,18 @@ $ cull 'tr' --has-text FAILED -t report.html
 $ cull '#readme' -i page.html
 ```
 
+When you want the whole structure as data instead of HTML, `--json-nodes`
+dumps each match as a `{tag, attrs, text, children}` tree for `jq`:
+
+```console
+# Every link on a page, as clean JSON (URLs resolved because the input is a URL):
+$ cull a --json-nodes https://lobste.rs | jq -c '{href: .attrs.href, text}'
+
+# Structured data (JSON-LD) hiding in <script> tags:
+$ cull 'script[type="application/ld+json"]' --json-nodes page.html \
+    | jq '.children[0] | fromjson | {name, datePublished}'
+```
+
 ---
 
 ## 8. Working over many files

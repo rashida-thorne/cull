@@ -123,6 +123,52 @@ fn json_array_flag() {
 }
 
 #[test]
+fn json_nodes_ndjson() {
+    let (out, _, code) = cull(&[".post h2 a", "--json-nodes", &fixture("blog.html")], None);
+    assert_eq!(code, 0);
+    let lines: Vec<&str> = out.lines().collect();
+    assert_eq!(lines.len(), 2);
+    let v: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
+    assert_eq!(
+        v,
+        serde_json::json!({
+            "tag": "a",
+            "attrs": {"href": "/posts/hello"},
+            "text": "Hello, world",
+            "children": ["Hello, world"]
+        })
+    );
+}
+
+#[test]
+fn json_nodes_array_pretty_and_base() {
+    let (out, _, _) = cull(
+        &[
+            ".post h2 a",
+            "--json-nodes",
+            "--array",
+            "--pretty",
+            "-b",
+            "https://blog.example",
+            &fixture("blog.html"),
+        ],
+        None,
+    );
+    let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+    let arr = v.as_array().unwrap();
+    assert_eq!(arr.len(), 2);
+    assert_eq!(arr[0]["attrs"]["href"], "https://blog.example/posts/hello");
+    assert!(out.contains("\n  "), "--pretty should indent");
+}
+
+#[test]
+fn json_nodes_no_match_exit_1() {
+    let (out, _, code) = cull(&["nope", "--json-nodes", &fixture("blog.html")], None);
+    assert_eq!(out, "");
+    assert_eq!(code, 1);
+}
+
+#[test]
 fn table_csv() {
     let (out, _, _) = cull(&["--table", &fixture("blog.html")], None);
     assert_eq!(out, "Item,Price\n\"Apple, red\",$1\nPear,$2\n");

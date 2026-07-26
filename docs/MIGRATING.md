@@ -49,7 +49,7 @@ header, and `<meta charset>`.
 | `pup 'a'` | `cull 'a'` |
 | `pup 'a text{}'` | `cull 'a' -t` |
 | `pup 'a attr{href}'` | `cull 'a' -a href` |
-| `pup 'a json{}'` | `cull 'a' -j '{...}'` — you name the fields you want |
+| `pup 'a json{}'` | `cull 'a' --json-nodes` (or `-j '{...}'` to name fields) |
 | `pup -f page.html 'a'` | `cull 'a' page.html` |
 | `pup --color 'div'` | `cull 'div'` (auto on TTY) |
 | pup's always-indented output | `cull -p 'div'` (indentation is opt-in) |
@@ -57,9 +57,11 @@ header, and `<meta charset>`.
 
 Differences worth knowing:
 
-- pup's `json{}` dumps the entire node structure; cull's `-j` templates
-  extract exactly the fields you ask for, so there's no follow-up `jq` pass
-  for the common cases.
+- `--json-nodes` is `json{}` with a cleaner shape: attributes live in their
+  own `attrs` object (pup inlines them beside `tag`/`text`, so an attribute
+  named `tag` collides), and every node carries collapsed subtree `text`.
+  For most jobs you won't need the dump at all — cull's `-j` templates
+  extract exactly the fields you ask for, so there's no follow-up `jq` pass.
 - pup prints each text node on its own line in `text{}`; cull's `-t` lays
   text out the way a browser would — inline elements join up, `<br>` and
   block boundaries become newlines, `<pre>` stays verbatim.
@@ -86,7 +88,7 @@ cull 'p:is(.post p, aside p)'
 cull 'span, .b'              # selector lists work everywhere too
 ```
 Non-standard extensions from pup (`slice{}`, `json{}`, text/attr pseudo
-"display filters") are replaced by cull's flags shown above.
+"display filters") are replaced by the cull flags shown above.
 
 Something missing from these tables? [Open an issue](https://github.com/rashida-thorne/cull/issues)
 — migration gaps are treated as bugs.

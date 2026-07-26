@@ -80,7 +80,7 @@ footer p{margin:6px 0}
     <tr><td><code>pup 'a'</code></td><td><code>cull 'a'</code></td></tr>
     <tr><td><code>pup 'a text{}'</code></td><td><code>cull 'a' -t</code></td></tr>
     <tr><td><code>pup 'a attr{href}'</code></td><td><code>cull 'a' -a href</code></td></tr>
-    <tr><td><code>pup 'a json{}'</code></td><td><code>cull 'a' -j '{…}'</code> — you name the fields you want</td></tr>
+    <tr><td><code>pup 'a json{}'</code></td><td><code>cull 'a' --json-nodes</code> — or <code>-j '{…}'</code> to name the fields you want</td></tr>
     <tr><td><code>pup -f page.html 'a'</code></td><td><code>cull 'a' page.html</code></td></tr>
     <tr><td><code>pup --color 'div'</code></td><td><code>cull 'div'</code> — color is automatic on a TTY (<code>--color always|never</code> to force)</td></tr>
     <tr><td>pup's always-indented output</td><td><code>cull -p 'div'</code> — indentation is opt-in; default is verbatim HTML</td></tr>
@@ -89,8 +89,11 @@ footer p{margin:6px 0}
   </table>
   <p class="note"><strong>The big difference:</strong> pup's <code>json{}</code>
   dumps the entire node structure and leaves you a <code>jq</code> pass to dig
-  the fields out. cull's <code>-j</code> takes a jq-style <em>template</em> and
-  emits exactly the object you asked for.</p>
+  the fields out. cull gives you both ends: <code>--json-nodes</code> is the
+  full dump (with attributes safely in their own <code>attrs</code> object and
+  collapsed <code>text</code> on every node), and <code>-j</code> takes a
+  jq-style <em>template</em> that emits exactly the object you asked for —
+  usually no <code>jq</code> pass at all.</p>
 </section>
 
 <section>

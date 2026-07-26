@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-07-26
+
+### Added
+- **`--json-nodes`** — dump each match as a JSON node tree (pup's `json{}`,
+  with a cleaner shape): `{"tag", "attrs": {…}, "text", "children": […]}`.
+  Attributes live in their own object so they can't collide with
+  `tag`/`text`; `text` is the collapsed subtree text; `children`
+  interleaves child elements and text-node strings; URL attributes respect
+  `-b/--base` (and auto-base for fetched URLs). Works with `--array` and
+  `-p/--pretty`, NDJSON by default. Also the escape hatch for raw
+  `<script>` payloads, e.g.
+  `cull 'script[type="application/ld+json"]' --json-nodes | jq '.children[0] | fromjson'`.
+
 ## [0.8.0] — 2026-07-26
 
 ### Added
@@ -116,7 +129,8 @@ Initial release.
   (`cull … | head` exits silently, like grep).
 - Prebuilt static binaries for 5 targets; `curl | sh` installer; Homebrew tap.
 
-[Unreleased]: https://github.com/rashida-thorne/cull/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/rashida-thorne/cull/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/rashida-thorne/cull/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/rashida-thorne/cull/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/rashida-thorne/cull/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/rashida-thorne/cull/compare/v0.5.0...v0.6.0

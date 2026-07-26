@@ -107,6 +107,7 @@ inputs are given). Globs just work: `cull 'a' -a href pages/*.html`.
 | `-t, --text` | text content with browser-style line breaks |
 | `-a, --attr NAME` | an attribute value per match |
 | `-j, --json TEMPLATE` | shaped JSON per match (NDJSON) |
+| `--json-nodes` | each match as a JSON node tree (pup's `json{}`) |
 | `--table` | tables as CSV (`--json-rows` for NDJSON) |
 | `--md` | Markdown |
 
@@ -146,6 +147,27 @@ $ cull '.story' -j "{title: .link a, score: .upvoter | num, tags: [.tag],
 
 Missing single values become `null`; missing lists become `[]` — rows stay
 rectangular for `jq`, `duckdb`, or a dataframe.
+
+### JSON node dumps
+
+When you'd rather have *everything* and shape it in `jq` yourself,
+`--json-nodes` dumps each match as a node tree — pup's `json{}`, but with
+attributes in their own object so they can't collide with `tag`/`text`:
+
+```console
+$ cull '.post h2 a' --json-nodes blog.html
+{"tag":"a","attrs":{"href":"/posts/hello"},"text":"Hello, world","children":["Hello, world"]}
+```
+
+`text` is the collapsed subtree text, `children` interleaves child element
+objects with text-node strings, and URL attributes respect `-b/--base`.
+`--array` and `-p` work like they do for `-j`. It also gets you raw
+`<script>` payloads — e.g. structured data:
+
+```console
+$ cull 'script[type="application/ld+json"]' --json-nodes page.html \
+    | jq '.children[0] | fromjson | .name'
+```
 
 ### Tables
 
@@ -206,7 +228,7 @@ in templates, and links/images in `--md`.
 - `-l, --files-with-matches` — print only the names of inputs with at least
   one match (like `grep -l`)
 - `-r, --remove SEL` — delete matching nodes first (repeatable)
-- `--array` — wrap `-j` output in a single JSON array
+- `--array` — wrap `-j` / `--json-nodes` output in a single JSON array
 - `-p, --pretty` — pretty-print: indented HTML, or indented JSON with `-j`/`--table`
 - `-b, --base URL` — base for resolving relative URLs
 - `-H, --header 'Name: Value'` — add a header to URL fetches, curl-style
@@ -271,6 +293,7 @@ with side-by-side command tables.
 | `:has()`, `:is()`, `:where()` | error | panic ([#65](https://github.com/mgdm/htmlq/issues/65)) | ✓ |
 | text / attr output | ✓ | ✓ | ✓ |
 | shaped JSON (`-j` templates) | — | — | ✓ |
+| JSON node dump | ✓ (`json{}`) | — | ✓ (`--json-nodes`) |
 | table → CSV/NDJSON | — | — | ✓ |
 | HTML → Markdown | — | — | ✓ |
 | remove nodes (`-r`) | — | ✓ | ✓ |
