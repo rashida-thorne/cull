@@ -183,6 +183,23 @@ curl and pipe: `curl -s "$URL" | cull ...`.
 
 ---
 
+## 10. In CI, without installing anything
+
+The container image is a single static binary (`FROM scratch`, ~2 MB), so it
+pulls fast and works the same everywhere Docker/Podman runs:
+
+```sh
+# Check your deployed page still has a title (smoke test step)
+curl -s https://example.com | docker run --rm -i ghcr.io/rashida-thorne/cull title -t
+
+# Extract release notes from generated HTML docs in a pipeline
+docker run --rm -i ghcr.io/rashida-thorne/cull '.changelog' --md < site/index.html
+```
+
+Pin a version with a tag: `ghcr.io/rashida-thorne/cull:0.6.0`.
+
+---
+
 ## Template syntax refresher
 
 ```

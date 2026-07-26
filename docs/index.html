@@ -132,6 +132,7 @@ footer p{margin:6px 0}
     <div class="tab" data-t="sh">curl | sh</div>
     <div class="tab" data-t="scoop">scoop</div>
     <div class="tab" data-t="nix">nix</div>
+    <div class="tab" data-t="docker">docker</div>
     <div class="tab" data-t="binstall">cargo binstall</div>
     <div class="tab" data-t="cargo">cargo</div>
   </div>
@@ -140,6 +141,7 @@ footer p{margin:6px 0}
   <div class="pane" data-p="scoop"><pre><button class="copy">copy</button>scoop bucket add cull https://github.com/rashida-thorne/scoop-cull
 scoop install cull</pre></div>
   <div class="pane" data-p="nix"><pre><button class="copy">copy</button>nix run github:rashida-thorne/cull</pre></div>
+  <div class="pane" data-p="docker"><pre><button class="copy">copy</button>docker run --rm -i ghcr.io/rashida-thorne/cull '.title' -t &lt; page.html</pre></div>
   <div class="pane" data-p="binstall"><pre><button class="copy">copy</button>cargo binstall cull</pre></div>
   <div class="pane" data-p="cargo"><pre><button class="copy">copy</button>cargo install cull</pre></div>
   <p class="sub" style="margin:8px 0 0;text-align:left">Prebuilt binaries (Linux x86_64/arm64 fully static, macOS, Windows) on the
