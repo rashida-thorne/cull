@@ -141,6 +141,18 @@ $ cull '#main' page.html | cull table --table
 
 `cull | head` is safe — SIGPIPE is handled like grep, no panic spew.
 
+`-i` gives you inner HTML instead (children only — handy when a wrapper tag
+would confuse the next tool in the pipe), and `--has-text` narrows matches by
+their visible text before any output mode runs:
+
+```console
+# The <tr> rows that mention a failure, as text:
+$ cull 'tr' --has-text FAILED -t report.html
+
+# Just the contents of the readme div, no wrapper:
+$ cull '#readme' -i page.html
+```
+
 ---
 
 ## 8. Working over many files

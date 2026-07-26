@@ -180,7 +180,7 @@ fn run(
         }
         "text" => {
             for m in &matches {
-                let t = text::collapsed_text(*m);
+                let t = text::block_text(*m);
                 if !t.is_empty() {
                     writeln!(out, "{t}").unwrap();
                 }

@@ -503,3 +503,87 @@ fn invalid_header_is_fatal() {
     assert_eq!(code, 2);
     assert!(err.contains("invalid --header"), "stderr was: {err}");
 }
+
+// --- v0.7.0: --inner, block-aware -t, --has-text ---
+
+#[test]
+fn inner_html_mode() {
+    let html = r#"<div id="box"><p>one</p><p>two</p></div>"#;
+    let (out, _, code) = cull(&["#box", "-i"], Some(html));
+    assert_eq!(out, "<p>one</p><p>two</p>\n");
+    assert_eq!(code, 0);
+}
+
+#[test]
+fn inner_html_pretty() {
+    let html = r#"<div id="box"><p>one</p><p>two</p></div>"#;
+    let (out, _, code) = cull(&["#box", "-i", "-p", "--color", "never"], Some(html));
+    assert_eq!(out, "<p>one</p>\n<p>two</p>\n");
+    assert_eq!(code, 0);
+}
+
+#[test]
+fn inner_html_text_only_child() {
+    let (out, _, code) = cull(&["b", "-i"], Some("<p><b>just &amp; text</b></p>"));
+    assert_eq!(out, "just &amp; text\n");
+    assert_eq!(code, 0);
+}
+
+#[test]
+fn text_mode_br_and_blocks() {
+    let html = "<div id=a>line one<br>line two<p>para</p></div>";
+    let (out, _, code) = cull(&["#a", "-t"], Some(html));
+    assert_eq!(out, "line one\nline two\npara\n");
+    assert_eq!(code, 0);
+}
+
+#[test]
+fn text_mode_pre_verbatim() {
+    let html = "<div id=a><p>intro</p><pre>  indented\n  code</pre></div>";
+    let (out, _, code) = cull(&["#a", "-t"], Some(html));
+    assert_eq!(out, "intro\n  indented\n  code\n");
+    assert_eq!(code, 0);
+}
+
+#[test]
+fn has_text_filters_matches() {
+    let html = "<ul><li>rust tool</li><li>go tool</li><li>rust lib</li></ul>";
+    let (out, _, code) = cull(&["li", "--has-text", "rust", "-t"], Some(html));
+    assert_eq!(out, "rust tool\nrust lib\n");
+    assert_eq!(code, 0);
+}
+
+#[test]
+fn has_text_multiple_are_anded() {
+    let html = "<ul><li>rust tool</li><li>go tool</li><li>rust lib</li></ul>";
+    let (out, _, code) = cull(
+        &["li", "--has-text", "rust", "--has-text", "lib", "-t"],
+        Some(html),
+    );
+    assert_eq!(out, "rust lib\n");
+    assert_eq!(code, 0);
+}
+
+#[test]
+fn has_text_no_match_exits_1() {
+    let (out, _, code) = cull(&["li", "--has-text", "zig", "-t"], Some("<li>rust</li>"));
+    assert_eq!(out, "");
+    assert_eq!(code, 1);
+}
+
+#[test]
+fn has_text_crosses_inline_tags() {
+    // The needle spans an inline tag boundary; collapsed text still matches.
+    let html = "<p>price: <b>42</b> dollars</p>";
+    let (out, _, code) = cull(&["p", "--has-text", "price: 42", "-t"], Some(html));
+    assert_eq!(out, "price: 42 dollars\n");
+    assert_eq!(code, 0);
+}
+
+#[test]
+fn has_text_with_count() {
+    let html = "<ul><li>rust tool</li><li>go tool</li><li>rust lib</li></ul>";
+    let (out, _, code) = cull(&["li", "--has-text", "rust", "-c"], Some(html));
+    assert_eq!(out, "2\n");
+    assert_eq!(code, 0);
+}

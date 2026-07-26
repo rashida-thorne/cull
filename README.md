@@ -103,8 +103,8 @@ inputs are given). Globs just work: `cull 'a' -a href pages/*.html`.
 
 | Flag | Output |
 |---|---|
-| *(none)* | outer HTML of each match |
-| `-t, --text` | collapsed text content |
+| *(none)* | outer HTML of each match (`-i` for inner HTML: children only) |
+| `-t, --text` | text content with browser-style line breaks |
 | `-a, --attr NAME` | an attribute value per match |
 | `-j, --json TEMPLATE` | shaped JSON per match (NDJSON) |
 | `--table` | tables as CSV (`--json-rows` for NDJSON) |
@@ -185,6 +185,9 @@ in templates, and links/images in `--md`.
 
 ### Other flags
 
+- `-i, --inner` — print inner HTML (children only, no outer tag)
+- `--has-text STRING` — keep only matches whose text contains STRING
+  (repeatable; all must be present): `cull 'tr' --has-text Error`
 - `-1, --first` — only the first match (per input)
 - `-c, --count` — print only the number of matches (like `grep -c`;
   `file:count` lines when given multiple inputs)
@@ -258,6 +261,9 @@ with side-by-side command tables.
 | table → CSV/NDJSON | — | — | ✓ |
 | HTML → Markdown | — | — | ✓ |
 | remove nodes (`-r`) | — | ✓ | ✓ |
+| inner HTML output | — | [asked](https://github.com/mgdm/htmlq/issues/75) | ✓ (`-i`) |
+| filter matches by text (`--has-text`) | — | [asked](https://github.com/mgdm/htmlq/issues/55) | ✓ |
+| browser-style text layout (`<br>`, blocks, `<pre>`) | — | [asked](https://github.com/mgdm/htmlq/issues/74) | ✓ |
 | colored HTML output | ✓ | — | ✓ (TTY auto-detect, `NO_COLOR`) |
 | pretty-printed HTML | always | — | opt-in (`-p`) |
 | fetch URLs directly | — | — | ✓ |

@@ -59,6 +59,35 @@ pub fn element_to_colored_html(el: ElementRef) -> String {
     out
 }
 
+/// Serialize the inner HTML of `el` (children only), optionally colored,
+/// unformatted. Children of raw-text elements are emitted unescaped.
+pub fn element_to_inner_html(el: ElementRef, color: bool) -> String {
+    let mut out = String::new();
+    let raw = RAW_TEXT.contains(&el.value().name());
+    for child in el.children() {
+        write_node(child, &mut out, raw, palette(color));
+    }
+    out
+}
+
+/// Serialize the inner HTML of `el` indented (2 spaces per level),
+/// optionally colored.
+pub fn element_to_pretty_inner_html(el: ElementRef, color: bool) -> String {
+    let name = el.value().name();
+    // Whitespace-sensitive contents are never reformatted.
+    if PRESERVE.contains(&name) || RAW_TEXT.contains(&name) {
+        return element_to_inner_html(el, color);
+    }
+    let mut out = String::new();
+    for child in el.children().filter(|c| !insignificant(c)) {
+        write_pretty(child, &mut out, 0, palette(color));
+    }
+    if out.ends_with('\n') {
+        out.pop();
+    }
+    out
+}
+
 /// Serialize the outer HTML of `el` indented (2 spaces per level),
 /// optionally colored. Contents of `pre`, `textarea`, `script`, and
 /// `style` are left verbatim.

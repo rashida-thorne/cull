@@ -1,12 +1,173 @@
-use scraper::ElementRef;
+use ego_tree::NodeRef;
+use scraper::{ElementRef, Node};
 
-/// Text content with whitespace collapsed, like what a browser would render inline.
+/// Text content with whitespace collapsed to single spaces, one line.
+/// Used wherever a single-line value is wanted (JSON templates, CSV cells).
 pub fn collapsed_text(el: ElementRef) -> String {
     let mut s = String::new();
     for chunk in el.text() {
         s.push_str(chunk);
     }
     collapse_ws(&s)
+}
+
+/// Elements that never contribute visible text.
+const INVISIBLE: &[&str] = &["script", "style", "template", "head", "noscript"];
+
+/// Elements rendered on their own line(s): a boundary before and after.
+const BLOCK: &[&str] = &[
+    "address",
+    "article",
+    "aside",
+    "blockquote",
+    "dd",
+    "details",
+    "dialog",
+    "div",
+    "dl",
+    "dt",
+    "fieldset",
+    "figcaption",
+    "figure",
+    "footer",
+    "form",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "header",
+    "hr",
+    "li",
+    "main",
+    "nav",
+    "ol",
+    "option",
+    "p",
+    "section",
+    "summary",
+    "table",
+    "tbody",
+    "td",
+    "tfoot",
+    "th",
+    "thead",
+    "tr",
+    "ul",
+];
+
+/// Elements whose text is whitespace-sensitive: kept verbatim.
+const VERBATIM: &[&str] = &["pre", "textarea"];
+
+enum Seg {
+    /// Inline text; whitespace will be collapsed.
+    Text(String),
+    /// Whitespace-sensitive text (<pre>), kept as-is.
+    Verbatim(String),
+    /// A line boundary (block edge or <br>).
+    Break,
+}
+
+/// Text content the way a browser would lay it out, roughly like
+/// `innerText`: `<br>` and block-element boundaries become newlines,
+/// `<pre>`/`<textarea>` contents are preserved verbatim, invisible
+/// elements (`script`, `style`, ...) are skipped, and everything else
+/// has its whitespace collapsed.
+pub fn block_text(el: ElementRef) -> String {
+    let mut segs = Vec::new();
+    collect(*el, &mut segs);
+    render(&segs)
+}
+
+fn collect(node: NodeRef<Node>, segs: &mut Vec<Seg>) {
+    match node.value() {
+        Node::Text(t) => {
+            if let Some(Seg::Text(prev)) = segs.last_mut() {
+                prev.push_str(t);
+            } else {
+                segs.push(Seg::Text(t.to_string()));
+            }
+        }
+        Node::Element(e) => {
+            let name = e.name();
+            if INVISIBLE.contains(&name) {
+                return;
+            }
+            if name == "br" {
+                segs.push(Seg::Break);
+                return;
+            }
+            if VERBATIM.contains(&name) {
+                let mut raw = String::new();
+                for chunk in ElementRef::wrap(node)
+                    .map(|el| el.text())
+                    .into_iter()
+                    .flatten()
+                {
+                    raw.push_str(chunk);
+                }
+                // Outer newlines are layout, not content.
+                let raw = raw.trim_matches('\n');
+                if !raw.is_empty() {
+                    segs.push(Seg::Break);
+                    segs.push(Seg::Verbatim(raw.to_string()));
+                    segs.push(Seg::Break);
+                }
+                return;
+            }
+            let block = BLOCK.contains(&name);
+            if block {
+                segs.push(Seg::Break);
+            }
+            for child in node.children() {
+                collect(child, segs);
+            }
+            if block {
+                segs.push(Seg::Break);
+            }
+        }
+        Node::Document | Node::Fragment => {
+            for child in node.children() {
+                collect(child, segs);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn render(segs: &[Seg]) -> String {
+    let mut out = String::new();
+    for seg in segs {
+        match seg {
+            Seg::Break => {
+                if !out.is_empty() && !out.ends_with('\n') {
+                    out.push('\n');
+                }
+            }
+            Seg::Text(t) => {
+                let collapsed = collapse_ws(t);
+                if !collapsed.is_empty() {
+                    // Mid-line continuation keeps the word boundary the
+                    // source whitespace implied.
+                    if !out.is_empty()
+                        && !out.ends_with('\n')
+                        && t.starts_with(|c: char| c.is_whitespace())
+                    {
+                        out.push(' ');
+                    }
+                    out.push_str(&collapsed);
+                }
+            }
+            Seg::Verbatim(v) => {
+                out.push_str(v);
+            }
+        }
+    }
+    while out.ends_with('\n') {
+        out.pop();
+    }
+    out
 }
 
 pub fn collapse_ws(s: &str) -> String {
@@ -118,6 +279,46 @@ mod tests {
     #[test]
     fn ws_collapse() {
         assert_eq!(collapse_ws("  a\n\t b  c "), "a b c");
+    }
+
+    fn bt(html: &str) -> String {
+        let doc = scraper::Html::parse_fragment(html);
+        block_text(doc.root_element())
+    }
+
+    #[test]
+    fn block_text_br_is_newline() {
+        assert_eq!(bt("a<br>b<br><br>c"), "a\nb\nc");
+    }
+
+    #[test]
+    fn block_text_block_boundaries() {
+        assert_eq!(bt("<div>x<p>para</p>y</div>"), "x\npara\ny");
+        assert_eq!(bt("<ul><li>one</li><li>two</li></ul>"), "one\ntwo");
+    }
+
+    #[test]
+    fn block_text_inline_stays_inline() {
+        assert_eq!(bt("x <b>bold</b> and <i>italic</i>."), "x bold and italic.");
+        assert_eq!(bt("gl<b>ue</b>d"), "glued");
+    }
+
+    #[test]
+    fn block_text_pre_verbatim() {
+        assert_eq!(bt("<p>a</p><pre>  two\n  lines</pre>"), "a\n  two\n  lines");
+    }
+
+    #[test]
+    fn block_text_skips_invisible() {
+        assert_eq!(
+            bt("<div>seen<script>var x=1;</script><style>p{}</style></div>"),
+            "seen"
+        );
+    }
+
+    #[test]
+    fn block_text_collapses_inline_ws() {
+        assert_eq!(bt("<p>a\n   b</p>"), "a b");
     }
 
     #[test]

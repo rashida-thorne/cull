@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-07-26
+
+All three features in this release answer long-open feature requests on
+htmlq's tracker ([#75](https://github.com/mgdm/htmlq/issues/75),
+[#55](https://github.com/mgdm/htmlq/issues/55),
+[#74](https://github.com/mgdm/htmlq/issues/74)).
+
+### Added
+- `-i`/`--inner` prints inner HTML — children only, no outer tag. Composes
+  with `-p` (pretty) and `--color`.
+- `--has-text STRING` keeps only matches whose text content contains STRING.
+  Repeatable (all strings must be present); runs before `-1`/`-c`/`-l`, so
+  counts and file lists reflect the filter. Matching is against
+  whitespace-collapsed text, so needles cross inline-tag boundaries.
+
+### Changed
+- `-t`/`--text` now lays text out the way a browser would (innerText-style):
+  `<br>` and block-element boundaries become newlines, `<pre>`/`<textarea>`
+  contents stay verbatim, `script`/`style`/`template` are skipped, and inline
+  whitespace is still collapsed. Previously block boundaries were dropped
+  entirely (`<div>x<p>y</p></div>` → `xy`). Single-line values in `-j`
+  templates and `--table` cells are unchanged.
+
 ## [0.6.0] — 2026-07-26
 
 ### Added
@@ -76,7 +99,8 @@ Initial release.
   (`cull … | head` exits silently, like grep).
 - Prebuilt static binaries for 5 targets; `curl | sh` installer; Homebrew tap.
 
-[Unreleased]: https://github.com/rashida-thorne/cull/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/rashida-thorne/cull/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/rashida-thorne/cull/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/rashida-thorne/cull/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/rashida-thorne/cull/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/rashida-thorne/cull/compare/v0.3.0...v0.4.0

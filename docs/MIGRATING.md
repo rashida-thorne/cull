@@ -30,6 +30,12 @@ cull --table --json-rows page.html
 
 # Page (minus chrome) to Markdown, e.g. to feed an LLM
 cull --md -r 'nav, footer, script, style' https://example.com/post
+
+# Inner HTML (htmlq#75), filter matches by their text (htmlq#55),
+# and <br>/block-aware text output (htmlq#74) — all open asks over there:
+cull '#readme' -i page.html
+cull 'tr' --has-text 'Error' log.html
+cull '.address' -t page.html        # <br> becomes a newline, as rendered
 ```
 
 Also: htmlq decodes everything as UTF-8 and produces mojibake on
@@ -54,8 +60,9 @@ Differences worth knowing:
 - pup's `json{}` dumps the entire node structure; cull's `-j` templates
   extract exactly the fields you ask for, so there's no follow-up `jq` pass
   for the common cases.
-- pup prints each text node on its own line in `text{}`; cull collapses
-  whitespace per match (one line per match).
+- pup prints each text node on its own line in `text{}`; cull's `-t` lays
+  text out the way a browser would — inline elements join up, `<br>` and
+  block boundaries become newlines, `<pre>` stays verbatim.
 - pup always re-indents HTML; cull emits it verbatim unless you pass `-p`
   (and `-p` never reformats inside `pre`, `textarea`, `script`, or `style`).
 - cull exits `1` when nothing matched (grep-style), which makes shell

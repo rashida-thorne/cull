@@ -22,9 +22,19 @@ struct Args {
     /// Input files or URLs (default: stdin; use - for stdin explicitly)
     inputs: Vec<String>,
 
-    /// Print collapsed text content of matches
+    /// Print text content of matches, laid out like a browser would:
+    /// <br> and block boundaries become newlines, <pre> is kept verbatim
     #[arg(short = 't', long)]
     text: bool,
+
+    /// Print inner HTML (children only, no outer tag) of matches
+    #[arg(short = 'i', long)]
+    inner: bool,
+
+    /// Keep only matches whose text content contains this string
+    /// (repeatable; every string must be present, like piping through grep)
+    #[arg(long, value_name = "STRING")]
+    has_text: Vec<String>,
 
     /// Print an attribute of each match
     #[arg(short = 'a', long, value_name = "NAME")]
@@ -290,6 +300,20 @@ fn run(args: &Args) -> Result<(bool, bool), String> {
             None => vec![doc.root_element()],
         };
 
+        // --has-text: keep matches whose (collapsed) text contains every
+        // given string. Runs before --first / --count / -l, like grep.
+        let matches: Vec<ElementRef> = if args.has_text.is_empty() {
+            matches
+        } else {
+            matches
+                .into_iter()
+                .filter(|m| {
+                    let t = text::collapsed_text(*m);
+                    args.has_text.iter().all(|needle| t.contains(needle))
+                })
+                .collect()
+        };
+
         // --first applies per input, like grep -m1.
         let matches: Vec<ElementRef> = if args.first {
             matches.into_iter().take(1).collect()
@@ -360,7 +384,7 @@ fn run(args: &Args) -> Result<(bool, bool), String> {
         } else if args.text {
             let mut any = false;
             for m in &matches {
-                let t = text::collapsed_text(*m);
+                let t = text::block_text(*m);
                 if !t.is_empty() {
                     any = true;
                     writeln!(out, "{t}").map_err(io_err)?;
@@ -371,14 +395,14 @@ fn run(args: &Args) -> Result<(bool, bool), String> {
             let mut any = false;
             for m in &matches {
                 any = true;
-                if args.pretty {
-                    writeln!(out, "{}", serialize::element_to_pretty_html(*m, colorize))
-                        .map_err(io_err)?;
-                } else if colorize {
-                    writeln!(out, "{}", serialize::element_to_colored_html(*m)).map_err(io_err)?;
-                } else {
-                    writeln!(out, "{}", m.html()).map_err(io_err)?;
-                }
+                let html = match (args.inner, args.pretty) {
+                    (true, true) => serialize::element_to_pretty_inner_html(*m, colorize),
+                    (true, false) => serialize::element_to_inner_html(*m, colorize),
+                    (false, true) => serialize::element_to_pretty_html(*m, colorize),
+                    (false, false) if colorize => serialize::element_to_colored_html(*m),
+                    (false, false) => m.html(),
+                };
+                writeln!(out, "{html}").map_err(io_err)?;
             }
             any
         };
