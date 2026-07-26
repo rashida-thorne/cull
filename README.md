@@ -380,19 +380,19 @@ Extract every link's `href` (1,921 matches):
 
 | Command | Mean [ms] | Relative |
 |:---|---:|---:|
-| `cull 'a' -a href` | 41.0 ± 3.1 | 1.00 |
-| `pup 'a attr{href}'` | 48.1 ± 1.8 | 1.17 |
-| `htmlq 'a' -a href` | 55.7 ± 9.5 | 1.36 |
+| `cull 'a' -a href` | 45.0 ± 3.8 | 1.00 |
+| `pup 'a attr{href}'` | 59.1 ± 5.8 | 1.31 |
+| `htmlq 'a' -a href` | 59.5 ± 5.6 | 1.32 |
 
 Extract paragraph text:
 
 | Command | Mean [ms] | Relative |
 |:---|---:|---:|
-| `cull 'p' -t` | 37.3 ± 3.4 | 1.00 |
-| `pup 'p text{}'` | 45.8 ± 1.9 | 1.23 |
-| `htmlq 'p' -t` | 53.3 ± 5.5 | 1.43 |
+| `cull 'p' -t` | 40.3 ± 2.7 | 1.00 |
+| `pup 'p text{}'` | 48.8 ± 2.7 | 1.21 |
+| `htmlq 'p' -t` | 57.4 ± 9.0 | 1.42 |
 
-(pup v0.4.0, htmlq v0.4.0, x86-64 Linux. Output formatting differs slightly
+(cull v0.12.0, pup v0.4.0, htmlq v0.4.0, x86-64 Linux. Output formatting differs slightly
 between tools — pup prints each text node on its own line — but the
 parse-and-select workload is identical.)
 
