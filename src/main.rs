@@ -578,11 +578,11 @@ fn emit<W: Write>(
     Ok(found)
 }
 
-/// `cull --md page.html [more.html ...]` puts an input in the selector slot;
-/// fix that up.
+/// `cull --md page.html [more.html ...]` (and `cull -I page.html`) puts an
+/// input in the selector slot; fix that up.
 fn disambiguate(args: &Args) -> (Option<String>, Vec<String>) {
     match &args.selector {
-        Some(s) if args.table || args.md => {
+        Some(s) if args.table || args.md || args.interactive => {
             let looks_like_input = s.starts_with("http://")
                 || s.starts_with("https://")
                 || s == "-"

@@ -866,3 +866,16 @@ fn interactive_conflicts_with_count() {
     assert_eq!(code, 2);
     assert!(err.contains("cannot be used with"), "stderr: {err}");
 }
+
+#[test]
+fn interactive_first_positional_may_be_an_input() {
+    // `cull -I page.html` should treat page.html as the input, not a selector
+    // (same disambiguation as --table/--md). Without a terminal it still
+    // errors, but it must NOT be the "reading stdin" path.
+    let (err, code) = cull_no_tty(&["-I", &fixture("blog.html")]);
+    assert_eq!(code, 2);
+    assert!(
+        err.contains("terminal") || err.contains("TTY"),
+        "expected a needs-a-terminal error, got: {err}"
+    );
+}
