@@ -1,0 +1,22 @@
+[package]
+name = "cull-playground"
+version = "0.1.0"
+edition = "2024"
+description = "WASM build of cull's core for the in-browser playground (not published)"
+license = "MIT"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+cull = { path = "..", default-features = false }
+scraper = "0.27.0"
+serde_json = { version = "1.0.151", features = ["preserve_order"] }
+
+[profile.release]
+opt-level = "z"
+lto = true
+strip = true
+codegen-units = 1
+panic = "abort"

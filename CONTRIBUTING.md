@@ -60,3 +60,19 @@ one, note the date you verified it.
    manifest, and `softwareVersion` in `docs/index.html` JSON-LD.
 6. Verify: `curl | sh` installer, `cargo binstall cull`, `brew install`,
    and the aarch64 binary under qemu.
+
+## WASM playground
+
+The website's [playground](https://rashida-thorne.github.io/cull/playground.html)
+runs cull's core compiled to WebAssembly (`playground/` crate, hand-rolled ABI,
+no wasm-bindgen). The built artifact `docs/cull.wasm` is committed. If you change
+anything that affects output (selection, --md, --table, -j templates, serializers),
+rebuild it:
+
+```sh
+rustup target add wasm32-unknown-unknown
+./scripts/build-playground.sh   # rebuilds and copies docs/cull.wasm
+```
+
+CI compiles the playground (and the no-default-features lib) so it can't rot,
+but does not diff the committed wasm.

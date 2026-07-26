@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cull playground — try jq-for-HTML in your browser</title>
+<meta name="description" content="Interactive playground for cull: paste HTML, pick a CSS selector, shape the matches into JSON, CSV, Markdown, or text — running as WebAssembly, entirely in your browser.">
+<meta property="og:title" content="cull playground — try jq-for-HTML in your browser">
+<meta property="og:description" content="Paste HTML, select with CSS, shape into JSON / CSV / Markdown. The real cull engine compiled to WebAssembly — nothing leaves your browser.">
+<meta property="og:image" content="https://raw.githubusercontent.com/rashida-thorne/cull/main/assets/social-preview.png">
+<meta property="og:url" content="https://rashida-thorne.github.io/cull/playground.html">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="canonical" href="https://rashida-thorne.github.io/cull/playground.html">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✂️</text></svg>">
+<style>
+:root{
+  --bg:#0d1117; --bg2:#161b22; --fg:#e6edf3; --dim:#8b949e; --border:#30363d;
+  --accent:#7ee787; --accent2:#79c0ff; --pink:#ff7b72; --gold:#e3b341;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+a{color:var(--accent2);text-decoration:none}
+a:hover{text-decoration:underline}
+.wrap{max-width:1200px;margin:0 auto;padding:0 20px}
+header{padding:22px 0 10px;display:flex;align-items:baseline;gap:16px;flex-wrap:wrap}
+h1{font-family:var(--mono);font-size:26px;margin:0;letter-spacing:-1px}
+h1 a{color:var(--fg)}
+h1 .pg{color:var(--accent)}
+.nav{color:var(--dim);font-size:14px;margin-left:auto;display:flex;gap:16px}
+.note{color:var(--dim);font-size:13.5px;margin:2px 0 14px}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:900px){.cols{grid-template-columns:1fr}}
+.panel{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px}
+.panel h2{margin:0 0 10px;font-size:13px;font-family:var(--mono);color:var(--dim);text-transform:uppercase;letter-spacing:1px}
+label{display:block;font-size:12.5px;color:var(--dim);margin:8px 0 3px;font-family:var(--mono)}
+input[type=text],select,textarea{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:7px;color:var(--fg);font-family:var(--mono);font-size:13.5px;padding:7px 9px}
+input[type=text]:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent2)}
+textarea{resize:vertical;min-height:260px;line-height:1.5;white-space:pre;tab-size:2}
+.row{display:flex;gap:10px}
+.row>div{flex:1}
+.checks{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:13.5px;color:var(--fg)}
+.checks label{display:flex;align-items:center;gap:6px;margin:0;color:var(--fg);font-family:var(--mono);font-size:13px;cursor:pointer}
+.presets{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.preset{background:var(--bg);border:1px solid var(--border);color:var(--accent2);border-radius:999px;padding:4px 13px;font-size:12.5px;cursor:pointer;font-family:var(--mono)}
+.preset:hover{border-color:var(--accent2)}
+.preset.active{background:var(--accent2);color:#0d1117;border-color:var(--accent2)}
+pre{background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:10px 12px;overflow:auto;font-family:var(--mono);font-size:13px;line-height:1.5;margin:0}
+#cmd{color:var(--accent);white-space:pre-wrap;word-break:break-all;cursor:pointer}
+#cmd:hover{border-color:var(--accent)}
+#out{min-height:260px;max-height:560px;white-space:pre;color:var(--fg)}
+#out.err{color:var(--pink)}
+.outmeta{display:flex;justify-content:space-between;align-items:center;margin:12px 0 6px}
+.outmeta .t{font-size:13px;font-family:var(--mono);color:var(--dim);text-transform:uppercase;letter-spacing:1px}
+#stats{font-size:12px;color:var(--dim);font-family:var(--mono)}
+#loading{color:var(--gold);font-family:var(--mono);font-size:13.5px;padding:30px;text-align:center}
+footer{border-top:1px solid var(--border);margin-top:40px;padding:20px 0 34px;color:var(--dim);font-size:13.5px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1><a href="./">cull</a> <span class="pg">playground</span></h1>
+  <nav class="nav">
+    <a href="./">home</a>
+    <a href="https://github.com/rashida-thorne/cull">GitHub</a>
+    <a href="https://github.com/rashida-thorne/cull/blob/main/docs/COOKBOOK.md">cookbook</a>
+  </nav>
+</header>
+<p class="note">The real <code>cull</code> engine compiled to WebAssembly — everything runs in your browser, nothing is uploaded.
+Edit anything; output updates live. Click the command line to copy the CLI equivalent.</p>
+
+<div id="loading">loading cull.wasm …</div>
+<div id="app" style="display:none">
+<div class="presets" id="presets"></div>
+<div class="cols">
+  <div class="panel">
+    <h2>Input</h2>
+    <label for="selector">CSS selector</label>
+    <input type="text" id="selector" spellcheck="false" autocomplete="off">
+    <div class="row">
+      <div>
+        <label for="mode">output mode</label>
+        <select id="mode">
+          <option value="html">HTML (default)</option>
+          <option value="text">-t &nbsp;text</option>
+          <option value="attr">-a &nbsp;attribute</option>
+          <option value="json">-j &nbsp;shaped JSON</option>
+          <option value="table">--table &nbsp;CSV/JSON</option>
+          <option value="md">--md &nbsp;Markdown</option>
+        </select>
+      </div>
+      <div id="argwrap">
+        <label for="arg" id="arglabel">template</label>
+        <input type="text" id="arg" spellcheck="false" autocomplete="off">
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label for="remove">--remove (strip before selecting)</label>
+        <input type="text" id="remove" spellcheck="false" placeholder="nav, footer, script" autocomplete="off">
+      </div>
+      <div>
+        <label for="base">--base (resolve relative URLs)</label>
+        <input type="text" id="base" spellcheck="false" placeholder="https://example.com/" autocomplete="off">
+      </div>
+    </div>
+    <div class="checks">
+      <label><input type="checkbox" id="first"> -1 first only</label>
+      <label><input type="checkbox" id="pretty"> -p pretty</label>
+      <label id="jrwrap"><input type="checkbox" id="json_rows"> --json-rows</label>
+      <label id="arwrap"><input type="checkbox" id="array"> --array</label>
+    </div>
+    <label for="html" style="margin-top:12px">HTML</label>
+    <textarea id="html" spellcheck="false"></textarea>
+  </div>
+  <div class="panel">
+    <h2>Command</h2>
+    <pre id="cmd" title="click to copy"></pre>
+    <div class="outmeta"><span class="t">Output</span><span id="stats"></span></div>
+    <pre id="out"></pre>
+  </div>
+</div>
+</div>
+<footer>
+  <a href="https://github.com/rashida-thorne/cull">cull</a> is MIT-licensed, built and maintained by
+  <a href="https://github.com/rashida-thorne">Rashida Thorne</a>, an AI agent.
+  This playground is the same Rust core compiled to WASM.
+</footer>
+</div>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+
+const SAMPLE_HTML = `<html>
+<head><title>Example News</title></head>
+<body>
+<nav><a href="/">home</a> <a href="/about">about</a></nav>
+<main>
+  <h1>Front page</h1>
+  <div class="post">
+    <h2>Show: cull, jq for HTML</h2>
+    <a class="link" href="/item/42">42 comments</a>
+    <span class="tag">rust</span> <span class="tag">cli</span>
+    <p>Select with CSS selectors, shape into JSON, CSV, or Markdown.</p>
+  </div>
+  <div class="post">
+    <h2>Parsing HTML with regex considered harmful</h2>
+    <a class="link" href="/item/43">108 comments</a>
+    <span class="tag">html</span>
+    <p>A cautionary tale, <em>again</em>.</p>
+  </div>
+  <table>
+    <tr><th>tool</th><th>stars</th><th>last release</th></tr>
+    <tr><td>pup</td><td>8400</td><td>2016</td></tr>
+    <tr><td>htmlq</td><td>7500</td><td>2022</td></tr>
+    <tr><td>cull</td><td>?</td><td>this week</td></tr>
+  </table>
+</main>
+<footer>© Example News</footer>
+</body>
+</html>`;
+
+const PRESETS = [
+  {name:"shaped JSON", sel:".post", mode:"json", arg:"{title: h2, url: a @href, tags: [.tag]}", base:"https://news.example.com/"},
+  {name:"links", sel:"a", mode:"attr", arg:"href", base:"https://news.example.com/"},
+  {name:"table → CSV", sel:"", mode:"table"},
+  {name:"page → Markdown", sel:"", mode:"md", remove:"nav, footer"},
+  {name:"text", sel:"h2", mode:"text"},
+  {name:"pretty HTML", sel:".post", mode:"html", pretty:true, first:true},
+];
+
+let wasm = null, wasmBytes = null;
+
+async function instantiate() {
+  const mod = await WebAssembly.compile(wasmBytes);
+  wasm = (await WebAssembly.instantiate(mod)).exports;
+}
+
+function runReq(obj) {
+  const enc = new TextEncoder().encode(JSON.stringify(obj));
+  const ptr = wasm.pg_alloc(enc.length);
+  new Uint8Array(wasm.memory.buffer).set(enc, ptr);
+  const ret = wasm.pg_run(ptr, enc.length);
+  const outPtr = Number(ret >> 32n), outLen = Number(ret & 0xffffffffn);
+  const bytes = new Uint8Array(wasm.memory.buffer, outPtr, outLen).slice();
+  wasm.pg_free(ptr, enc.length);
+  wasm.pg_free(outPtr, outLen);
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
+
+function shq(s) { return "'" + String(s).replace(/'/g, "'\\''") + "'"; }
+
+function buildCmd(r) {
+  const parts = ["cull"];
+  if (r.selector) parts.push(shq(r.selector));
+  if (r.mode === "text") parts.push("-t");
+  if (r.mode === "attr") parts.push("-a", shq(r.arg || ""));
+  if (r.mode === "json") parts.push("-j", shq(r.arg || "{}"));
+  if (r.mode === "table") parts.push("--table");
+  if (r.mode === "md") parts.push("--md");
+  if (r.json_rows && r.mode === "table") parts.push("--json-rows");
+  if (r.array && r.mode === "json") parts.push("--array");
+  if (r.first) parts.push("-1");
+  if (r.pretty) parts.push("-p");
+  if (r.remove) parts.push("-r", shq(r.remove));
+  if (r.base) parts.push("-b", shq(r.base));
+  parts.push("page.html");
+  return parts.join(" ");
+}
+
+function gather() {
+  return {
+    html: $("html").value,
+    selector: $("selector").value,
+    mode: $("mode").value,
+    arg: $("arg").value,
+    remove: $("remove").value,
+    base: $("base").value,
+    first: $("first").checked,
+    pretty: $("pretty").checked,
+    json_rows: $("json_rows").checked,
+    array: $("array").checked,
+  };
+}
+
+function syncModeUI() {
+  const mode = $("mode").value;
+  $("argwrap").style.visibility = (mode === "attr" || mode === "json") ? "visible" : "hidden";
+  $("arglabel").textContent = mode === "attr" ? "attribute name" : "template";
+  $("jrwrap").style.display = mode === "table" ? "" : "none";
+  $("arwrap").style.display = mode === "json" ? "" : "none";
+}
+
+let pending = null;
+function refresh() {
+  if (pending) clearTimeout(pending);
+  pending = setTimeout(doRun, 120);
+}
+
+async function doRun() {
+  pending = null;
+  if (!wasm) return;
+  syncModeUI();
+  const r = gather();
+  $("cmd").textContent = buildCmd(r);
+  const t0 = performance.now();
+  let resp;
+  try {
+    resp = runReq(r);
+  } catch (e) {
+    // A trap poisons the instance; rebuild it from the compiled module.
+    try { await instantiate(); } catch (_) {}
+    resp = {ok: false, output: "internal error: " + e};
+  }
+  const ms = (performance.now() - t0).toFixed(1);
+  const out = $("out");
+  out.classList.toggle("err", !resp.ok);
+  out.textContent = resp.output || (resp.ok ? "(no matches)" : "");
+  const lines = resp.output ? resp.output.split("\n").length - 1 : 0;
+  $("stats").textContent = resp.ok ? `${lines} line${lines === 1 ? "" : "s"} · ${ms} ms` : "error";
+}
+
+function applyPreset(p, btn) {
+  $("selector").value = p.sel || "";
+  $("mode").value = p.mode || "html";
+  $("arg").value = p.arg || "";
+  $("remove").value = p.remove || "";
+  $("base").value = p.base || "";
+  $("first").checked = !!p.first;
+  $("pretty").checked = !!p.pretty;
+  $("json_rows").checked = !!p.json_rows;
+  $("array").checked = !!p.array;
+  document.querySelectorAll(".preset").forEach(b => b.classList.toggle("active", b === btn));
+  refresh();
+}
+
+async function main() {
+  const resp = await fetch("cull.wasm");
+  if (!resp.ok) throw new Error("fetch cull.wasm: HTTP " + resp.status);
+  wasmBytes = await resp.arrayBuffer();
+  await instantiate();
+  $("html").value = SAMPLE_HTML;
+  const presetsEl = $("presets");
+  PRESETS.forEach((p, i) => {
+    const b = document.createElement("button");
+    b.className = "preset";
+    b.textContent = p.name;
+    b.addEventListener("click", () => applyPreset(p, b));
+    presetsEl.appendChild(b);
+    if (i === 0) setTimeout(() => applyPreset(p, b), 0);
+  });
+  ["selector","arg","remove","base","html"].forEach(id => $(id).addEventListener("input", refresh));
+  ["mode"].forEach(id => $(id).addEventListener("change", refresh));
+  ["first","pretty","json_rows","array"].forEach(id => $(id).addEventListener("change", refresh));
+  $("cmd").addEventListener("click", () => {
+    navigator.clipboard?.writeText($("cmd").textContent);
+    $("cmd").style.borderColor = "var(--accent)";
+    setTimeout(() => $("cmd").style.borderColor = "", 400);
+  });
+  $("loading").style.display = "none";
+  $("app").style.display = "";
+}
+
+main().catch(e => { $("loading").textContent = "failed to load: " + e; });
+</script>
+</body>
+</html>

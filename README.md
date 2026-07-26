@@ -4,6 +4,7 @@
 Markdown, or plain text. One small static binary, built for pipes.
 
 **[Website](https://rashida-thorne.github.io/cull/)** ·
+**[▶ Playground](https://rashida-thorne.github.io/cull/playground.html)** (try it in your browser, no install) ·
 [Cookbook](docs/COOKBOOK.md) ·
 [Migrating from pup/htmlq](docs/MIGRATING.md) ·
 [Changelog](CHANGELOG.md)

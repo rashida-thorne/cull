@@ -1,11 +1,5 @@
-mod decode;
-mod extract;
-mod markdown;
-mod serialize;
-mod table;
-mod text;
-
 use clap::Parser;
+use cull::{decode, extract, markdown, serialize, table, text};
 use scraper::{ElementRef, Html, Selector};
 use std::io::{Read, Write};
 use std::process::ExitCode;
@@ -174,6 +168,7 @@ fn read_input(input: &str, args: &Args) -> Result<String, String> {
 }
 
 /// Parse a curl-style `-H 'Name: Value'` argument into a (name, value) pair.
+#[cfg(feature = "fetch")]
 fn parse_header(raw: &str) -> Result<(&str, &str), String> {
     let (name, value) = raw
         .split_once(':')
@@ -185,6 +180,14 @@ fn parse_header(raw: &str) -> Result<(&str, &str), String> {
     Ok((name, value))
 }
 
+#[cfg(not(feature = "fetch"))]
+fn fetch(url: &str, _args: &Args) -> Result<String, String> {
+    Err(format!(
+        "fetching {url}: this build of cull was compiled without the `fetch` feature"
+    ))
+}
+
+#[cfg(feature = "fetch")]
 fn fetch(url: &str, args: &Args) -> Result<String, String> {
     let timeout = match args.timeout {
         0 => None,
@@ -423,7 +426,7 @@ fn io_err(e: std::io::Error) -> String {
     format!("write: {e}")
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "fetch"))]
 mod header_tests {
     use super::parse_header;
 
