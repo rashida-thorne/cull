@@ -11,12 +11,13 @@ fn cull(args: &[&str], stdin: Option<&str>) -> (String, String, i32) {
         .stderr(Stdio::piped());
     let mut child = cmd.spawn().expect("spawn cull");
     if let Some(input) = stdin {
-        child
-            .stdin
-            .as_mut()
-            .unwrap()
-            .write_all(input.as_bytes())
-            .unwrap();
+        // Tolerate EPIPE: if the child exits before reading stdin (e.g. an
+        // invalid-selector error), the write racing against that exit is fine.
+        match child.stdin.as_mut().unwrap().write_all(input.as_bytes()) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => {}
+            Err(e) => panic!("write to child stdin: {e}"),
+        }
     }
     drop(child.stdin.take());
     let out = child.wait_with_output().expect("wait");
