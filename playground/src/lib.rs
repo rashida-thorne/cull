@@ -9,14 +9,16 @@
 //! - `pg_run(ptr, len) -> u64`       run cull; returns (out_ptr << 32) | out_len
 //!
 //! Request JSON:
-//! `{html, selector?, mode, arg?, remove?, base?, first?, pretty?, json_rows?, array?}`
-//! where `mode` is one of `html | text | attr | json | table | md`
-//! and `arg` carries the attribute name (attr) or template (json).
+//! `{html, selector?, mode, arg?, remove?, base?, first?, pretty?, json_rows?, array?, doc?}`
+//! where `mode` is one of `html | text | attr | json | table | md | nodes`,
+//! `arg` carries the attribute name (attr) or template (json), and `doc`
+//! is `auto` (default) | `html` | `xml` — mirroring the CLI's XML
+//! auto-detection and `--xml` / `--html` overrides.
 //!
 //! Response JSON: `{ok: bool, output: string}` — on ok=false, `output` is the
 //! error message (same wording as the CLI where possible).
 
-use cull::{extract, markdown, serialize, table, text};
+use cull::{extract, markdown, nodes, serialize, table, text, xml};
 use scraper::{ElementRef, Html, Selector};
 use serde_json::Value;
 use std::io::Write;
@@ -87,6 +89,7 @@ fn run_json(request: &str) -> String {
         b("pretty"),
         b("json_rows"),
         b("array"),
+        s("doc").unwrap_or("auto"),
     ) {
         Ok(out) => ok(out),
         Err(e) => err(e),
@@ -105,6 +108,7 @@ fn run(
     pretty: bool,
     json_rows: bool,
     array: bool,
+    doc_kind: &str,
 ) -> Result<String, String> {
     let selector = match selector_src {
         Some(s) => Some(Selector::parse(s).map_err(|e| format!("invalid selector {s:?}: {e}"))?),
@@ -117,7 +121,19 @@ fn run(
         None => None,
     };
 
-    let mut doc = Html::parse_document(html);
+    // Mirror the CLI: --xml hard-errors on malformed XML; auto-detect
+    // falls back to the forgiving HTML parser.
+    let mut doc = match doc_kind {
+        "xml" => xml::parse_xml(html)?,
+        "html" => Html::parse_document(html),
+        _ => {
+            if xml::looks_like_xml(html) {
+                xml::parse_xml(html).unwrap_or_else(|_| Html::parse_document(html))
+            } else {
+                Html::parse_document(html)
+            }
+        }
+    };
     if let Some(sel) = &remove_sel {
         let ids: Vec<_> = doc.select(sel).map(|el| el.id()).collect();
         for id in ids {
@@ -157,6 +173,20 @@ fn run(
             let values: Vec<Value> = matches
                 .iter()
                 .map(|m| extract::eval(&tmpl, *m, base))
+                .collect();
+            if array {
+                let v = Value::Array(values);
+                writeln!(out, "{}", fmt_json(&v, pretty)).unwrap();
+            } else {
+                for v in values {
+                    writeln!(out, "{}", fmt_json(&v, pretty)).unwrap();
+                }
+            }
+        }
+        "nodes" => {
+            let values: Vec<Value> = matches
+                .iter()
+                .map(|m| nodes::element_to_json(*m, base))
                 .collect();
             if array {
                 let v = Value::Array(values);
@@ -247,6 +277,39 @@ mod tests {
         }));
         assert!(!ok);
         assert!(o.contains("invalid selector"));
+    }
+
+    #[test]
+    fn xml_autodetect_preserves_rss_links() {
+        let (ok, o) = out(serde_json::json!({
+            "html": "<?xml version=\"1.0\"?><rss><channel><item><title>T</title><link>https://e.com/x</link><pubDate>now</pubDate></item></channel></rss>",
+            "selector": "item", "mode": "json", "arg": "{t: title, u: link, when: pubDate}"
+        }));
+        assert!(ok);
+        assert_eq!(
+            o,
+            "{\"t\":\"T\",\"u\":\"https://e.com/x\",\"when\":\"now\"}\n"
+        );
+    }
+
+    #[test]
+    fn xml_override_errors_on_malformed() {
+        let (ok, o) = out(serde_json::json!({
+            "html": "<rss><unclosed></rss>", "mode": "text", "doc": "xml"
+        }));
+        assert!(!ok, "expected hard error, got: {o}");
+    }
+
+    #[test]
+    fn nodes_mode() {
+        let (ok, o) = out(serde_json::json!({
+            "html": "<p id=x>hi <b>there</b></p>", "selector": "p", "mode": "nodes"
+        }));
+        assert!(ok);
+        let v: serde_json::Value = serde_json::from_str(o.trim()).unwrap();
+        assert_eq!(v["tag"], "p");
+        assert_eq!(v["attrs"]["id"], "x");
+        assert_eq!(v["text"], "hi there");
     }
 
     #[test]

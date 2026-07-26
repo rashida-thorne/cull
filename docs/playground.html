@@ -88,6 +88,7 @@ Edit anything; output updates live. Click the command line to copy the CLI equiv
           <option value="json">-j &nbsp;shaped JSON</option>
           <option value="table">--table &nbsp;CSV/JSON</option>
           <option value="md">--md &nbsp;Markdown</option>
+          <option value="nodes">--json-nodes &nbsp;node tree</option>
         </select>
       </div>
       <div id="argwrap">
@@ -161,6 +162,26 @@ const SAMPLE_HTML = `<html>
 </body>
 </html>`;
 
+const SAMPLE_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+<channel>
+  <title>Example Feed</title>
+  <link>https://feed.example.com/</link>
+  <item>
+    <title>cull 0.10 parses real XML</title>
+    <link>https://feed.example.com/cull-xml</link>
+    <pubDate>Sun, 26 Jul 2026 12:00:00 GMT</pubDate>
+    <category>release</category>
+  </item>
+  <item>
+    <title>Why HTML parsers eat your RSS &lt;link&gt;s</title>
+    <link>https://feed.example.com/void-links</link>
+    <pubDate>Sat, 25 Jul 2026 09:30:00 GMT</pubDate>
+    <category>explainer</category>
+  </item>
+</channel>
+</rss>`;
+
 const PRESETS = [
   {name:"shaped JSON", sel:".post", mode:"json", arg:"{title: h2, url: a @href, tags: [.tag]}", base:"https://news.example.com/"},
   {name:"nested JSON", sel:"main", mode:"json", arg:"{page: h1, posts: [.post {title: h2, comments: .link | num, tags: [.tag]}]}", base:"https://news.example.com/"},
@@ -169,6 +190,8 @@ const PRESETS = [
   {name:"page → Markdown", sel:"", mode:"md", remove:"nav, footer"},
   {name:"text", sel:"h2", mode:"text"},
   {name:"pretty HTML", sel:".post", mode:"html", pretty:true, first:true},
+  {name:"RSS / XML", sel:"item", mode:"json", arg:"{title: title, url: link, when: pubDate}", input:"xml"},
+  {name:"node tree", sel:".post", mode:"nodes", pretty:true, first:true, base:"https://news.example.com/"},
 ];
 
 let wasm = null, wasmBytes = null;
@@ -200,13 +223,14 @@ function buildCmd(r) {
   if (r.mode === "json") parts.push("-j", shq(r.arg || "{}"));
   if (r.mode === "table") parts.push("--table");
   if (r.mode === "md") parts.push("--md");
+  if (r.mode === "nodes") parts.push("--json-nodes");
   if (r.json_rows && r.mode === "table") parts.push("--json-rows");
-  if (r.array && r.mode === "json") parts.push("--array");
+  if (r.array && (r.mode === "json" || r.mode === "nodes")) parts.push("--array");
   if (r.first) parts.push("-1");
   if (r.pretty) parts.push("-p");
   if (r.remove) parts.push("-r", shq(r.remove));
   if (r.base) parts.push("-b", shq(r.base));
-  parts.push("page.html");
+  parts.push(/^\uFEFF?\s*<\?xml/.test(r.html || "") ? "feed.xml" : "page.html");
   return parts.join(" ");
 }
 
@@ -230,7 +254,7 @@ function syncModeUI() {
   $("argwrap").style.visibility = (mode === "attr" || mode === "json") ? "visible" : "hidden";
   $("arglabel").textContent = mode === "attr" ? "attribute name" : "template";
   $("jrwrap").style.display = mode === "table" ? "" : "none";
-  $("arwrap").style.display = mode === "json" ? "" : "none";
+  $("arwrap").style.display = (mode === "json" || mode === "nodes") ? "" : "none";
 }
 
 let pending = null;
@@ -262,7 +286,15 @@ async function doRun() {
   $("stats").textContent = resp.ok ? `${lines} line${lines === 1 ? "" : "s"} · ${ms} ms` : "error";
 }
 
+let lastAppliedInput = null;
 function applyPreset(p, btn) {
+  // Swap the sample input to match the preset (HTML vs XML), but never
+  // clobber text the user has edited themselves.
+  const want = p.input === "xml" ? SAMPLE_XML : SAMPLE_HTML;
+  if (lastAppliedInput === null || $("html").value === lastAppliedInput) {
+    $("html").value = want;
+  }
+  lastAppliedInput = want;
   $("selector").value = p.sel || "";
   $("mode").value = p.mode || "html";
   $("arg").value = p.arg || "";
