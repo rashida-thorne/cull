@@ -587,3 +587,40 @@ fn has_text_with_count() {
     assert_eq!(out, "2\n");
     assert_eq!(code, 0);
 }
+
+// --- modern selector support (htmlq panics on these; pup rejects them) ---
+
+#[test]
+fn selector_has() {
+    let html = r#"<div class="a"><p>x</p></div><div class="b">y</div>"#;
+    let (out, _, code) = cull(&["div:has(p)"], Some(html));
+    assert_eq!(out, "<div class=\"a\"><p>x</p></div>\n");
+    assert_eq!(code, 0);
+}
+
+#[test]
+fn selector_not_has() {
+    let html = r#"<div class="a"><p>x</p></div><div class="b">y</div>"#;
+    let (out, _, code) = cull(&["div:not(:has(p))"], Some(html));
+    assert_eq!(out, "<div class=\"b\">y</div>\n");
+    assert_eq!(code, 0);
+}
+
+#[test]
+fn selector_is_and_where() {
+    let html = r#"<div class="a"><p>x</p></div><section><p>y</p></section><aside><p>z</p></aside>"#;
+    let (out, _, code) = cull(&["p:is(.a p, section p)", "-t"], Some(html));
+    assert_eq!(out, "x\ny\n");
+    assert_eq!(code, 0);
+    let (out, _, code) = cull(&[":where(section, aside) p", "-t"], Some(html));
+    assert_eq!(out, "y\nz\n");
+    assert_eq!(code, 0);
+}
+
+#[test]
+fn selector_list_comma() {
+    let html = r#"<span>s</span><div class="b">y</div><em>e</em>"#;
+    let (out, _, code) = cull(&["span, .b", "-t"], Some(html));
+    assert_eq!(out, "s\ny\n");
+    assert_eq!(code, 0);
+}

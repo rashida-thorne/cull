@@ -74,6 +74,17 @@ cull uses [the `scraper` crate's](https://docs.rs/scraper) CSS selector
 engine (html5ever + selectors — the same matching code as Firefox/Servo).
 Standard CSS works: descendant/child/sibling combinators, attribute
 selectors (`a[href^="https:"]`), `:not()`, `:nth-child()`, etc.
+
+That includes the modern pseudo-classes neither pup nor htmlq handles —
+htmlq **panics** on `:has()` ([htmlq#65](https://github.com/mgdm/htmlq/issues/65));
+pup rejects it ([pup#194](https://github.com/ericchiang/pup/issues/194)):
+
+```sh
+cull 'div:has(p)'            # elements that contain a <p>
+cull 'div:not(:has(p))'      # elements that don't
+cull 'p:is(.post p, aside p)'
+cull 'span, .b'              # selector lists work everywhere too
+```
 Non-standard extensions from pup (`slice{}`, `json{}`, text/attr pseudo
 "display filters") are replaced by cull's flags shown above.
 

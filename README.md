@@ -256,6 +256,7 @@ with side-by-side command tables.
 | | pup | htmlq | **cull** |
 |---|---|---|---|
 | CSS selectors | ✓ | ✓ | ✓ |
+| `:has()`, `:is()`, `:where()` | error | panic ([#65](https://github.com/mgdm/htmlq/issues/65)) | ✓ |
 | text / attr output | ✓ | ✓ | ✓ |
 | shaped JSON (`-j` templates) | — | — | ✓ |
 | table → CSV/NDJSON | — | — | ✓ |

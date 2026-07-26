@@ -83,6 +83,7 @@ footer p{margin:6px 0}
     <tr><td><code>htmlq --remove-nodes nav 'a'</code></td><td><code>cull 'a' -r nav</code></td></tr>
     <tr><td><code>htmlq 'a' --filename page.html</code></td><td><code>cull 'a' page.html</code></td></tr>
     <tr><td><code>htmlq --pretty '#main'</code></td><td><code>cull -p '#main'</code> — indented, and syntax-colored on a TTY</td></tr>
+    <tr><td><code>htmlq 'div:has(p)'</code> → <strong>panics</strong> (<a href="https://github.com/mgdm/htmlq/issues/65">htmlq#65</a>)</td><td><code>cull 'div:has(p)'</code> — <code>:has()</code>, <code>:is()</code>, <code>:where()</code> all work</td></tr>
   </table>
 </section>
 

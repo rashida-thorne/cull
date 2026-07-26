@@ -85,6 +85,7 @@ footer p{margin:6px 0}
     <tr><td><code>pup --color 'div'</code></td><td><code>cull 'div'</code> — color is automatic on a TTY (<code>--color always|never</code> to force)</td></tr>
     <tr><td>pup's always-indented output</td><td><code>cull -p 'div'</code> — indentation is opt-in; default is verbatim HTML</td></tr>
     <tr><td><code>pup 'div slice{0,1}'</code></td><td><code>cull 'div' -1</code>, or CSS <code>:nth-child()</code> / <code>:nth-of-type()</code></td></tr>
+    <tr><td><code>pup 'div:has(p)'</code> → <em>“not a valid pseudo class”</em> (<a href="https://github.com/ericchiang/pup/issues/194">pup#194</a>)</td><td><code>cull 'div:has(p)'</code> — <code>:has()</code>, <code>:is()</code>, <code>:where()</code> all work</td></tr>
   </table>
   <p class="note"><strong>The big difference:</strong> pup's <code>json{}</code>
   dumps the entire node structure and leaves you a <code>jq</code> pass to dig
