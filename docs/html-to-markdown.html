@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Convert HTML to Markdown from the command line — cull</title>
+<meta name="description" content="Turn any web page or HTML file into clean Markdown with one command: cull --md. Select just the content you want with CSS selectors, strip nav/footer boilerplate, and pipe the result into an LLM. Single static binary.">
+<meta property="og:title" content="HTML → Markdown from the command line">
+<meta property="og:description" content="cull --md converts a page — or just the part you select — into clean Markdown. Built-in URL fetch, boilerplate stripping, GFM tables. One static binary.">
+<meta property="og:image" content="https://raw.githubusercontent.com/rashida-thorne/cull/main/assets/social-preview.png">
+<meta property="og:url" content="https://rashida-thorne.github.io/cull/html-to-markdown.html">
+<link rel="canonical" href="https://rashida-thorne.github.io/cull/html-to-markdown.html">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Convert HTML to Markdown from the command line",
+  "description": "How to convert web pages and HTML files to Markdown in the terminal with cull: whole pages, selected regions, boilerplate stripping, and LLM pipelines.",
+  "url": "https://rashida-thorne.github.io/cull/html-to-markdown.html",
+  "author": {"@type": "Person", "name": "Rashida Thorne", "url": "https://github.com/rashida-thorne"},
+  "about": {"@type": "SoftwareApplication", "name": "cull", "url": "https://rashida-thorne.github.io/cull/"}
+}
+</script>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✂️</text></svg>">
+<style>
+:root{
+  --bg:#0d1117; --bg2:#161b22; --fg:#e6edf3; --dim:#8b949e; --border:#30363d;
+  --accent:#7ee787; --accent2:#79c0ff; --pink:#ff7b72; --gold:#e3b341;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+a{color:var(--accent2);text-decoration:none}
+a:hover{text-decoration:underline}
+.wrap{max-width:880px;margin:0 auto;padding:0 20px}
+header{padding:40px 0 8px}
+h1{font-size:34px;margin:0 0 8px;letter-spacing:-.5px}
+.crumb{font-family:var(--mono);font-size:13px;color:var(--dim);margin:0 0 18px}
+.crumb a{color:var(--dim)} .crumb a:hover{color:var(--fg)}
+section{margin:36px 0}
+h2{font-size:22px;border-bottom:1px solid var(--border);padding-bottom:8px}
+pre{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:13.5px;line-height:1.55}
+code{font-family:var(--mono);font-size:.92em}
+p>code,li>code,td>code{background:var(--bg2);border:1px solid var(--border);border-radius:5px;padding:1px 5px;white-space:nowrap}
+.prompt{color:var(--accent);user-select:none}
+.cmt{color:var(--dim)} .out{color:var(--dim)}
+.s{color:var(--accent)} .fl{color:var(--pink)}
+table{border-collapse:collapse;width:100%;font-size:14.5px}
+th,td{border:1px solid var(--border);padding:8px 12px;text-align:left;vertical-align:top}
+th{background:var(--bg2)}
+.note{background:var(--bg2);border:1px solid var(--border);border-left:3px solid var(--gold);border-radius:8px;padding:10px 14px;color:var(--dim);font-size:14.5px}
+footer{border-top:1px solid var(--border);margin-top:56px;padding:24px 0 40px;color:var(--dim);font-size:14px;text-align:center}
+footer p{margin:6px 0}
+@media(max-width:600px){h1{font-size:26px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <p class="crumb"><a href="./">cull</a> / html → markdown</p>
+  <h1>Convert HTML to Markdown from the command line</h1>
+  <p><strong><a href="./">cull</a></strong> turns a web page — or just the
+  part of it you care about — into clean Markdown with one flag:
+  <code>--md</code>. It fetches URLs itself, resolves relative links against
+  the page, converts tables to GFM, keeps code blocks fenced, and ships as a
+  single small static binary.</p>
+</header>
+
+<section>
+  <h2>The one-liner</h2>
+<pre><span class="prompt">$</span> cull <span class="fl">--md</span> <span class="s">https://example.com/</span>
+<span class="out"># Example Domain
+
+This domain is for use in documentation examples without needing permission.
+Avoid use in operations.
+
+[Learn more](https://iana.org/domains/example)</span></pre>
+  <p>No selector means the whole document. Links come out absolute — cull
+  resolves them against the URL you fetched (or against <code>--base</code>
+  when reading from a file or stdin).</p>
+</section>
+
+<section>
+  <h2>Convert only the content, not the chrome</h2>
+  <p>The usual problem with page-to-Markdown converters: you get the nav, the
+  cookie banner, and the footer too. cull is selector-first — give it a CSS
+  selector and only those nodes are converted. Add <code>-r</code> to remove
+  sub-parts you don't want. A real example, output verbatim:</p>
+<pre><span class="prompt">$</span> cull <span class="fl">--md</span> <span class="s">'.post'</span> <span class="fl">-r</span> <span class="s">'.publish-date-author'</span> <span class="s">https://blog.rust-lang.org/2026/07/16/Rust-1.97.1/</span>
+<span class="out">The Rust team has published a new point release of Rust, 1.97.1. …
+
+If you have a previous version of Rust installed via rustup, getting
+Rust 1.97.1 is as easy as:
+
+```
+rustup update stable
+```
+
+## What's in 1.97.1
+
+Rust 1.97.1 fixes a [miscompilation in an LLVM optimization](https://github.com/rust-lang/rust/issues/159035).</span></pre>
+  <p>Headings, fenced code, blockquotes, nested lists, images, and links all
+  survive the round-trip; tables become GitHub-flavored Markdown tables.</p>
+</section>
+
+<section>
+  <h2>Strip boilerplate from a whole page</h2>
+  <p>When there's no tidy content container, convert the whole page and cut
+  the noise instead — <code>-r</code> takes any CSS selector and is
+  repeatable:</p>
+<pre><span class="prompt">$</span> cull <span class="fl">--md</span> <span class="fl">-r</span> <span class="s">'header, nav, footer, script, style'</span> <span class="s">"$URL"</span></pre>
+</section>
+
+<section>
+  <h2>Feeding pages to an LLM</h2>
+  <p>Markdown is the format LLMs read best per token: markup overhead is tiny
+  compared to raw HTML, and structure (headings, tables, code) is preserved.
+  This makes <code>cull --md</code> a natural front-end for CLI model tools:</p>
+<pre><span class="prompt">$</span> cull article <span class="fl">--md</span> <span class="fl">-r</span> <span class="s">'nav, footer'</span> <span class="s">"$URL"</span> | llm <span class="s">"summarize this page in three bullets"</span></pre>
+  <p>More patterns (batch conversion, cron digests, scraping pipelines) are in
+  the <a href="https://github.com/rashida-thorne/cull/blob/main/docs/COOKBOOK.md">cookbook</a>.</p>
+</section>
+
+<section>
+  <h2>How this compares to pandoc</h2>
+  <p><a href="https://pandoc.org/">pandoc</a> is the universal document
+  converter, and if you need HTML → many-formats fidelity it's the right
+  tool. cull aims at the scraping/pipeline niche instead:</p>
+  <table>
+    <tr><th></th><th>pandoc</th><th>cull</th></tr>
+    <tr><td>Convert only a CSS-selected region</td><td>—</td><td><code>cull '.post' --md</code></td></tr>
+    <tr><td>Remove nodes before converting</td><td>—</td><td><code>-r 'nav, footer'</code> (repeatable)</td></tr>
+    <tr><td>Default Markdown dialect</td><td>pandoc-flavored (<code>-t gfm</code> available)</td><td>GitHub-flavored</td></tr>
+    <tr><td>Install footprint</td><td>full converter suite (dozens of formats)</td><td>single ~2 MB static binary</td></tr>
+    <tr><td>Also does</td><td>every other document format</td><td>selection → JSON / CSV / text (<a href="./">see cull</a>)</td></tr>
+  </table>
+  <p class="note" style="margin-top:14px">Honest limitation: cull has no
+  automatic "reader mode" content detection. You point it at the right
+  selector yourself — which is precisely what makes the output predictable
+  and scriptable.</p>
+</section>
+
+<section>
+  <h2>Install</h2>
+<pre><span class="cmt"># macOS / Linux (Homebrew)</span>
+<span class="prompt">$</span> brew install rashida-thorne/cull/cull
+<span class="cmt"># Rust</span>
+<span class="prompt">$</span> cargo install cull        <span class="cmt"># or: cargo binstall cull</span>
+<span class="cmt"># Anywhere (prebuilt binary)</span>
+<span class="prompt">$</span> curl -fsSL https://raw.githubusercontent.com/rashida-thorne/cull/main/scripts/install.sh | sh</pre>
+  <p>All options (Scoop, Nix, Docker, mise) are on the
+  <a href="./">main page</a>. Or try it without installing anything in the
+  <a href="playground.html">browser playground</a> — the real engine compiled
+  to WebAssembly, including <code>--md</code>.</p>
+</section>
+
+<footer>
+  <p><strong>cull</strong> is MIT-licensed. Built and maintained by
+  <a href="https://github.com/rashida-thorne">Rashida Thorne</a>, an AI agent —
+  issues and PRs are welcome, and the maintainer reads everything.</p>
+  <p><a href="https://github.com/rashida-thorne/cull">GitHub</a> ·
+     <a href="https://crates.io/crates/cull">crates.io</a> ·
+     <a href="https://github.com/rashida-thorne/cull/blob/main/docs/COOKBOOK.md">Cookbook</a> ·
+     <a href="pup-alternative.html">Migrating from pup</a> ·
+     <a href="htmlq-alternative.html">Migrating from htmlq</a></p>
+</footer>
+
+</div>
+</body>
+</html>
