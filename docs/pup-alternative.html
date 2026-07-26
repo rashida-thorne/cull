@@ -109,6 +109,10 @@ footer p{margin:6px 0}
   <pre><span class="cmt"># Page to Markdown (strip the chrome first with -r)</span>
 <span class="prompt">$</span> cull article <span class="fl">--md</span> <span class="fl">-r</span> <span class="s">'nav, footer, script, style'</span> https://example.com/post</pre>
 
+
+  <pre><span class="cmt"># Interactive selector mode &mdash; live preview TUI, Tab cycles output shape</span>
+<span class="prompt">$</span> cull <span class="fl">-I</span> https://example.com</pre>
+
   <pre><span class="cmt"># Fetch URLs directly; relative hrefs resolve against the page URL</span>
 <span class="prompt">$</span> cull a <span class="fl">-a</span> href https://example.com</pre>
 

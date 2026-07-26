@@ -90,6 +90,9 @@ footer p{margin:6px 0}
 <section>
   <h2>What htmlq has no equivalent for</h2>
 
+  <pre><span class="cmt"># Interactive selector mode &mdash; live preview TUI, Tab cycles output shape</span>
+<span class="prompt">$</span> cull <span class="fl">-I</span> https://example.com</pre>
+
   <pre><span class="cmt"># Shaped JSON — a jq-style template turns each match into a clean object (NDJSON)</span>
 <span class="prompt">$</span> cull <span class="s">'.athing.submission'</span> <span class="fl">-j</span> <span class="s">'{title: .titleline > a, url: .titleline > a @href}'</span> https://news.ycombinator.com
 <span class="out">{"title":"…","url":"https://…"}</span></pre>
