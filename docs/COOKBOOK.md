@@ -232,6 +232,19 @@ docker run --rm -i ghcr.io/rashida-thorne/cull '.changelog' --md < site/index.ht
 
 Pin a version with a tag: `ghcr.io/rashida-thorne/cull:0.6.0`.
 
+On GitHub Actions you can skip Docker entirely —
+[`setup-cull`](https://github.com/rashida-thorne/setup-cull) installs the
+static binary for the runner's OS/arch (Linux x64/arm64, macOS, Windows)
+and adds it to `PATH`:
+
+```yaml
+- uses: rashida-thorne/setup-cull@v1
+- name: check og tags on the deployed page
+  run: |
+    n=$(cull 'meta[property="og:title"], meta[property="og:description"]' -c public/index.html)
+    [ "$n" -ge 2 ] || { echo "missing og tags"; exit 1; }
+```
+
 ---
 
 ## 11. XML: RSS/Atom feeds, sitemaps

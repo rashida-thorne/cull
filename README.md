@@ -92,6 +92,14 @@ docker run --rm -i ghcr.io/rashida-thorne/cull '.title' -t < page.html
 docker run --rm ghcr.io/rashida-thorne/cull 'h2 a' -a href https://example.com
 ```
 
+GitHub Actions — [`setup-cull`](https://github.com/rashida-thorne/setup-cull)
+puts the binary on `PATH` on Linux/macOS/Windows runners:
+
+```yaml
+- uses: rashida-thorne/setup-cull@v1
+- run: curl -s https://example.com | cull h1 -t
+```
+
 Already have Rust but don't want to compile? [`cargo binstall cull`](https://github.com/cargo-bins/cargo-binstall)
 fetches the prebuilt binary for your platform. [mise](https://mise.jdx.dev) users:
 `mise use -g ubi:rashida-thorne/cull`.
